@@ -1,0 +1,16 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - revive
+    - gocyclo
+    - misspell
+
+  settings:
+    gocyclo:
+      min-complexity: 15

@@ -1,0 +1,19 @@
+## OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
+!frontend/.vscode/
+
+## Backend
+backend/bin/
+backend/coverage.out
+
+## Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+frontend/.angular/
+
+## Logs
+*.log
