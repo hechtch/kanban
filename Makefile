@@ -57,7 +57,9 @@ container-build:
 	$(CONTAINER_RUNTIME) build -t $(IMAGE) .
 
 container-run:
+	@mkdir -p $(HOME)/.kanban/data
 	$(CONTAINER_RUNTIME) run --rm -p 8000:8000 \
+		--user $$(id -u):$$(id -g) \
 		-v $(HOME)/.kanban/data:/data:Z \
 		-e KANBAN_DB_PATH=/data/kanban.db \
 		$(IMAGE)

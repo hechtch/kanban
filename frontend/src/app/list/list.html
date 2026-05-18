@@ -1,0 +1,113 @@
+<div class="list">
+  @for (group of groups(); track group.project?.id ?? 0) {
+    <section class="group">
+      <header class="group-head">
+        @if (group.project) {
+          <span class="dot" [style.background]="group.project.color"></span>
+        }
+        <h2>{{ group.project?.name ?? 'Inbox' }}</h2>
+        <span class="count">{{ group.tasks.length }}</span>
+      </header>
+
+      <ul>
+        @for (t of group.tasks; track t.id) {
+          <li class="row" [class.is-editing]="editing()?.taskId === t.id">
+            <button
+              type="button"
+              class="row-toggle"
+              [attr.aria-expanded]="editing()?.taskId === t.id"
+              (click)="toggleEdit(t)"
+            >
+              <span class="status" [attr.data-status]="t.status">{{ t.status }}</span>
+              @if (t.priority > 0) {
+                <span class="prio" [attr.data-prio]="t.priority">{{ '!'.repeat(t.priority) }}</span>
+              }
+              <span class="title">{{ t.title }}</span>
+              @if (t.tags.length) {
+                <span class="tags">
+                  @for (tag of t.tags; track tag) {
+                    <span class="tag">#{{ tag }}</span>
+                  }
+                </span>
+              }
+              @if (t.due_text) { <span class="due">{{ t.due_text }}</span> }
+            </button>
+
+            @if (editing()?.taskId === t.id) {
+              <form class="editor" (submit)="$event.preventDefault(); saveEdit()">
+                <label>
+                  <span>Title</span>
+                  <input
+                    type="text"
+                    [(ngModel)]="editing()!.title"
+                    name="title-{{ t.id }}"
+                    required
+                  />
+                </label>
+
+                <div class="row-fields">
+                  <label>
+                    <span>Status</span>
+                    <select [(ngModel)]="editing()!.status" name="status-{{ t.id }}">
+                      @for (s of statuses; track s) {
+                        <option [value]="s">{{ s }}</option>
+                      }
+                    </select>
+                  </label>
+                  <label>
+                    <span>Priority</span>
+                    <select [(ngModel)]="editing()!.priority" name="prio-{{ t.id }}">
+                      <option [ngValue]="0">none</option>
+                      <option [ngValue]="1">! low</option>
+                      <option [ngValue]="2">!! medium</option>
+                      <option [ngValue]="3">!!! high</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>Due</span>
+                    <input
+                      type="text"
+                      [(ngModel)]="editing()!.due_text"
+                      name="due-{{ t.id }}"
+                      placeholder="today · fri · next wk"
+                    />
+                  </label>
+                  <label>
+                    <span>Project</span>
+                    <select [(ngModel)]="editing()!.project_id" name="proj-{{ t.id }}">
+                      <option [ngValue]="null">— inbox —</option>
+                      @for (p of projects(); track p.id) {
+                        <option [ngValue]="p.id">{{ p.name }}</option>
+                      }
+                    </select>
+                  </label>
+                </div>
+
+                <label>
+                  <span>Tags</span>
+                  <input
+                    type="text"
+                    [(ngModel)]="editing()!.tagsText"
+                    name="tags-{{ t.id }}"
+                    placeholder="ping, urgent"
+                  />
+                </label>
+
+                <div class="actions">
+                  <button type="button" class="danger" (click)="deleteTask(t)">Delete</button>
+                  <span class="spacer"></span>
+                  <button type="button" class="ghost" (click)="cancelEdit()">Cancel</button>
+                  <button type="submit" class="primary" [disabled]="!editing()!.title.trim()">
+                    Save
+                  </button>
+                </div>
+              </form>
+            }
+          </li>
+        } @empty {
+          <li class="empty">no tasks</li>
+        }
+      </ul>
+    </section>
+  }
+</div>

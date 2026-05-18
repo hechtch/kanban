@@ -95,7 +95,7 @@ priority from `1–4`, and inline edits all hit it.
 - [x] SQLite via `modernc.org/sqlite` (pure-Go, no CGO)
 - [x] Migrations baked in: run on startup, idempotent
 - [x] `internal/store` package owns DB access; handlers are thin
-- [ ] CRUD for projects + tasks; `GET /api/tasks` filtering
+- [x] CRUD for projects + tasks; `GET /api/tasks` filtering
 - [x] `golangci-lint` config + `go test ./...` with visible coverage
 
 ### Phase 2 — Angular shell
@@ -104,43 +104,59 @@ priority from `1–4`, and inline edits all hit it.
       diverges from `~/.claude/CLAUDE.angular.md` which predates v20;
       revisit if Jest is strictly required)*
 - [x] `<base href>`-derived API base in a single service
-- [ ] App shell: header (project name, `← Dashboard` link when
+- [x] App shell: header (project name, `← Dashboard` link when
       proxied), sidebar (project list + counts), main area
-- [ ] Routing: `/board` (default), `/list`
+- [x] Routing: `/board` (default), `/list`
 - [x] Live region `<div role="status" aria-live="polite">` in shell
 - [x] Bundle budgets configured per dashboard rule
-- [~] Notebook-paper look: cream `#f6f2e8`, ink `#1f2430`, coral
-      `#d4654a` set as CSS vars; Inter + Caveat font wiring still
-      pending
+- [x] Notebook-paper look: cream `#f6f2e8`, ink `#1f2430`, coral
+      `#d4654a` set as CSS vars; Inter + Caveat fonts loaded via
+      `@fontsource/{inter,caveat}`
 
 ### Phase 3 — Board view
-- [ ] 4 columns rendered from a fixed enum; cards from `/api/tasks`
-- [ ] Card component (roomy variant from wireframe)
-- [ ] Drag-and-drop reorder + cross-column status change (Angular CDK)
-- [ ] Quick-edit popover: right-click or `⋯` menu
-- [ ] Keyboard: arrow navigation, `space`, `e`, `1–4`
+- [x] 4 columns rendered from a fixed enum; cards from `/api/tasks`
+- [x] Card component (roomy variant from wireframe)
+- [x] Drag-and-drop reorder + cross-column status change (Angular CDK)
+      — fractional `sort_order` midpoint so a drop is one PATCH
+- [x] Quick-edit popover: `⋯` menu (status / priority / delete);
+      full edit dialog deferred to Phase 4
+- [x] Keyboard: arrow nav, `space` cycle status, `1–4` priority,
+      `delete`/`backspace` delete. `e` to open edit modal lands in
+      Phase 4 with the modal itself.
 
 ### Phase 4 — Create flows
-- [ ] Modal dialog (a11y per `CLAUDE.angular.md`: role/aria-modal/
-      labelledby, focus trap, Escape closes)
-- [ ] Inline quick-add at the top of each column
-- [ ] `⌘N` natural-language capture → `POST /api/tasks/parse` →
-      preview → confirm. Parser is intentionally simple at first
-      (regex for `!`/`!!`/`!!!`, `@project`, `#tag`, trailing
-      `by <due-text>`)
+- [x] Modal dialog (a11y per `CLAUDE.angular.md`: role/aria-modal/
+      labelledby, focus trap, Escape closes). Shared by new + edit
+      flows; opened on `e` from a focused card.
+- [x] Inline quick-add at the top of each column
+- [x] `⌘N` natural-language capture → `POST /api/tasks/parse` →
+      preview → confirm. Parser regex: `!`/`!!`/`!!!`, `@project`,
+      `#tag`, trailing `by <due-text>`. Project name resolves to
+      `project_id` server-side when it matches an existing project.
 
 ### Phase 5 — List view
-- [ ] Roomy density grouped by project
-- [ ] Click row → inline expand for editing (single pattern, not
+- [x] Roomy density grouped by project
+- [x] Click row → inline expand for editing (single pattern, not
       three)
 
 ### Phase 6 — Polish & ship
-- [ ] Dockerfile + Makefile per global standards (`run`, `run-bg`,
-      `build`, `test`, `lint`, `clean`, `container-*`)
-- [ ] Append service to dashboard `docker-compose.yml` + `up.sh`
-- [ ] `CHANGELOG.md` with `[Unreleased] → Added` block populated
+- [x] Dockerfile + Makefile per global standards (`run`, `run-bg`,
+      `build`, `test`, `lint`, `clean`, `container-*`). Backend now
+      uses `//go:embed all:web` behind a `-tags embed` build tag so
+      the container ships UI + API in one binary while `go run .`
+      in dev stays cheap (no `web/` required).
+- [x] Append service to dashboard `docker-compose.yml`, `up.sh`,
+      and `apps.yaml`. Dashboard uses the split-container pattern
+      (`app-kanban` via shared `frontend.Dockerfile` with
+      `BASE_HREF=/apps/kanban/`; `app-kanban-backend` via shared
+      `go.Dockerfile`). The kanban-tree Dockerfile remains for
+      standalone single-binary deploys.
+- [x] `CHANGELOG.md` with `[Unreleased] → Added` block populated
 - [ ] Smoke-test the `⌘N` flow end-to-end in a browser
+      *(user action — I exercised the API and built the bundles,
+      but didn't open a real browser this session)*
 - [ ] Tag `v0.1.0` and move this file to `plans/done/kanban.md`
+      *(user action — release tag is yours)*
 
 ## Open questions
 

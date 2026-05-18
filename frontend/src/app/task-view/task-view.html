@@ -1,0 +1,151 @@
+@if (task(); as t) {
+  <article class="task-page">
+    <nav class="crumbs">
+      <a routerLink="/board" class="back">← board</a>
+      <span class="sep">·</span>
+      <span class="muted">task #{{ t.id }}</span>
+      <span class="spacer"></span>
+      <button type="button" class="danger ghost" (click)="remove()">Delete</button>
+    </nav>
+
+    <header class="hd">
+      @if (editingTitle()) {
+        <input
+          #titleEditor
+          class="title-input"
+          [ngModel]="draftTitle()"
+          (ngModelChange)="draftTitle.set($event)"
+          (blur)="commitTitle()"
+          (keydown.enter)="commitTitle()"
+          (keydown.escape)="cancelTitle()"
+        />
+      } @else {
+        <h1 class="title" tabindex="0" (click)="startTitleEdit()" (keydown.enter)="startTitleEdit()">
+          {{ t.title }}
+        </h1>
+      }
+    </header>
+
+    <dl class="meta">
+      <div class="field">
+        <dt>Status</dt>
+        <dd>
+          <select [ngModel]="t.status" (ngModelChange)="setStatus($event)">
+            @for (s of statuses; track s) {
+              <option [value]="s">{{ s }}</option>
+            }
+          </select>
+        </dd>
+      </div>
+
+      <div class="field">
+        <dt>Priority</dt>
+        <dd>
+          <select [ngModel]="t.priority" (ngModelChange)="setPriority(+$event)">
+            @for (p of priorities; track p) {
+              <option [ngValue]="p">{{ prioLabel(p) }}</option>
+            }
+          </select>
+        </dd>
+      </div>
+
+      <div class="field">
+        <dt>Due</dt>
+        <dd>
+          <input
+            type="text"
+            [ngModel]="t.due_text"
+            (blur)="setDueText($any($event.target).value)"
+            (keydown.enter)="$any($event.target).blur()"
+            placeholder="today · fri · next wk"
+          />
+        </dd>
+      </div>
+
+      <div class="field">
+        <dt>Project</dt>
+        <dd>
+          <select
+            [ngModel]="t.project_id ?? ''"
+            (ngModelChange)="setProject($event)"
+          >
+            <option value="">— inbox —</option>
+            @for (p of store.projects(); track p.id) {
+              <option [ngValue]="p.id">{{ p.name }}</option>
+            }
+          </select>
+        </dd>
+      </div>
+
+      <div class="field tags">
+        <dt>Tags</dt>
+        <dd>
+          <input
+            type="text"
+            [ngModel]="tagsDraft()"
+            (ngModelChange)="tagsDraft.set($event)"
+            (blur)="commitTags()"
+            (keydown.enter)="$any($event.target).blur()"
+            placeholder="comma, separated"
+          />
+        </dd>
+      </div>
+    </dl>
+
+    <section class="body-section" [class.editing]="editingBody()">
+      <div class="body-head">
+        <h2>Notes</h2>
+        @if (!editingBody()) {
+          <button type="button" class="ghost" (click)="startBodyEdit()" title="e">
+            ✎ Edit
+          </button>
+        } @else {
+          <div class="body-actions">
+            <button type="button" class="ghost" (click)="cancelBody()">Cancel</button>
+            <button type="button" class="primary" (click)="commitBody()">Save</button>
+          </div>
+        }
+      </div>
+
+      @if (editingBody()) {
+        <textarea
+          #bodyEditor
+          class="body-editor"
+          [ngModel]="draftBody()"
+          (ngModelChange)="draftBody.set($event)"
+          (keydown)="onBodyKeydown($event)"
+          placeholder="# Markdown supported
+
+Write notes, repro steps, links — anything.
+
+- lists
+- **bold**, *italic*, `code`
+- > blockquotes
+
+`⌘↵` to save · `Esc` to cancel"
+        ></textarea>
+      } @else if (t.body.trim()) {
+        <div class="body-rendered" [innerHTML]="renderedBody()"></div>
+      } @else {
+        <p class="body-empty" (click)="startBodyEdit()">
+          No notes yet — click <em>Edit</em> (or press <kbd>e</kbd>) to add some.
+        </p>
+      }
+    </section>
+
+    <footer class="ts">
+      <span>created {{ t.created_at }}</span>
+      <span>·</span>
+      <span>updated {{ t.updated_at }}</span>
+      @if (t.completed_at) {
+        <span>·</span>
+        <span>done {{ t.completed_at }}</span>
+      }
+    </footer>
+  </article>
+} @else {
+  <div class="not-found">
+    <p>Task not found.</p>
+    <a routerLink="/board">← back to board</a>
+  </div>
+}

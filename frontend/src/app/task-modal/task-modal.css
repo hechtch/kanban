@@ -1,0 +1,92 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(31, 36, 48, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 1rem;
+}
+
+.dialog {
+  background: var(--paper);
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  padding: 1.25rem 1.25rem 1rem;
+  width: min(28rem, 100%);
+  box-shadow: 0 10px 30px rgba(31, 36, 48, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.dialog h2 {
+  font-family: var(--font-hand);
+  font-size: 1.5rem;
+  margin: 0 0 0.5rem;
+  color: var(--ink);
+}
+
+.dialog label {
+  font-size: 0.78rem;
+  color: var(--ink-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.dialog input,
+.dialog select {
+  width: 100%;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  background: #fff;
+  font: inherit;
+  color: var(--ink);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem;
+}
+
+.row label {
+  display: block;
+  margin-bottom: 0.2rem;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.actions button {
+  border: 1px solid var(--hairline);
+  background: #fff;
+  border-radius: 4px;
+  padding: 0.4rem 0.85rem;
+  font: inherit;
+  cursor: pointer;
+  color: var(--ink);
+}
+
+.actions .primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.actions .primary:disabled {
+  background: var(--muted);
+  border-color: var(--muted);
+  cursor: not-allowed;
+}
+
+.actions .ghost {
+  background: transparent;
+  color: var(--ink-2);
+}

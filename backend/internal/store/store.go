@@ -39,6 +39,7 @@ func (s *Store) migrate() error {
 		`CREATE TABLE IF NOT EXISTS task (
 			id            INTEGER PRIMARY KEY,
 			title         TEXT NOT NULL,
+			body          TEXT NOT NULL DEFAULT '',
 			status        TEXT NOT NULL CHECK (status IN ('todo','doing','waiting','done','backlog')),
 			priority      INTEGER NOT NULL DEFAULT 0 CHECK (priority BETWEEN 0 AND 3),
 			due_text      TEXT NOT NULL DEFAULT '',
@@ -64,6 +65,34 @@ func (s *Store) migrate() error {
 		if _, err := s.db.Exec(stmt); err != nil {
 			return fmt.Errorf("exec %q: %w", firstLine(stmt), err)
 		}
+	}
+	if err := s.addColumnIfMissing("task", "body", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *Store) addColumnIfMissing(table, column, decl string) error {
+	rows, err := s.db.Query(`SELECT name FROM pragma_table_info(?)`, table)
+	if err != nil {
+		return fmt.Errorf("pragma table_info(%s): %w", table, err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return err
+		}
+		if name == column {
+			return nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	_, err = s.db.Exec(fmt.Sprintf(`ALTER TABLE %s ADD COLUMN %s %s`, table, column, decl))
+	if err != nil {
+		return fmt.Errorf("add column %s.%s: %w", table, column, err)
 	}
 	return nil
 }

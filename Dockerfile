@@ -16,7 +16,7 @@ RUN go mod download
 COPY backend/ ./
 # Embed the built frontend so the binary serves both UI + API.
 COPY --from=frontend-build /src/dist ./web
-RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /out/kanban .
+RUN CGO_ENABLED=0 go build -tags embed -ldflags="-s -w" -o /out/kanban .
 
 # ─── Runtime ─────────────────────────────────────────────
 FROM gcr.io/distroless/static-debian12:nonroot

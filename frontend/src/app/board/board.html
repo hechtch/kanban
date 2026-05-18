@@ -1,0 +1,102 @@
+<div
+  class="board"
+  cdkDropListGroup
+  (keydown)="onKeydown($event)"
+>
+  @for (col of columns; track col) {
+    <section class="column" [attr.aria-label]="col + ' column'">
+      <header class="col-head">
+        <h2>{{ col }}</h2>
+        <span class="count">{{ tasksFor(col).length }}</span>
+      </header>
+
+      <form class="quick-add" (submit)="$event.preventDefault(); submitQuickAdd(col)">
+        <input
+          type="text"
+          [attr.aria-label]="'add task to ' + col"
+          placeholder="+ add task"
+          [ngModel]="quickAdd()[col]"
+          (ngModelChange)="quickAddInput(col, $event)"
+          name="quickAdd-{{ col }}"
+        />
+      </form>
+
+      <ul
+        class="cards"
+        cdkDropList
+        [cdkDropListData]="tasksFor(col)"
+        [id]="'col-' + col"
+        (cdkDropListDropped)="onDrop($event, col)"
+        role="list"
+      >
+        @for (t of tasksFor(col); track t.id) {
+          <app-card
+            cdkDrag
+            [cdkDragData]="t"
+            #cardEl
+            [attr.data-task-id]="t.id"
+            [attr.data-col]="col"
+            [task]="t"
+            [project]="projectFor(t)"
+            (menu)="openMenu($event, t)"
+          />
+        } @empty {
+          <li class="empty">drop tasks here</li>
+        }
+      </ul>
+    </section>
+  }
+</div>
+
+@if (menu()) {
+  <div
+    class="menu-overlay"
+    (click)="closeMenu()"
+    (contextmenu)="closeMenu(); $event.preventDefault()"
+  ></div>
+  <div
+    class="menu"
+    role="menu"
+    [style.top.px]="menu()!.y"
+    [style.left.px]="menu()!.x"
+  >
+    <button type="button" role="menuitem" (click)="openEdit(menu()!.task); closeMenu()">
+      Edit…
+    </button>
+    <button type="button" role="menuitem" (click)="cycleStatus(menu()!.task); closeMenu()">
+      Cycle status
+    </button>
+    @for (s of columns; track s) {
+      <button
+        type="button"
+        role="menuitem"
+        [disabled]="menu()!.task.status === s"
+        (click)="setStatus(menu()!.task, s); closeMenu()"
+      >→ {{ s }}</button>
+    }
+    <hr />
+    @for (p of [1, 2, 3, 0]; track p) {
+      <button
+        type="button"
+        role="menuitem"
+        [disabled]="menu()!.task.priority === p"
+        (click)="setPriority(menu()!.task, p); closeMenu()"
+      >Priority {{ p === 0 ? 'none' : '!'.repeat(p) }}</button>
+    }
+    <hr />
+    <button type="button" role="menuitem" class="danger" (click)="remove(menu()!.task); closeMenu()">
+      Delete
+    </button>
+  </div>
+}
+
+@if (creating()) {
+  <app-task-modal
+    mode="new"
+    [projects]="projectsSig()"
+    [initialStatus]="creating()!.status"
+    (save)="onModalSave($event)"
+    (cancel)="closeModals()"
+  />
+}
+

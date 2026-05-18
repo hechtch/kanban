@@ -1,5 +1,52 @@
-<main>
+<header class="app-header">
+  @if (inDashboard) {
+    <a class="back" href="/">← Dashboard</a>
+  }
   <h1>Kanban</h1>
-  <router-outlet />
-</main>
+  <nav class="views" aria-label="View">
+    <a routerLink="/board" routerLinkActive="active">Board</a>
+    <a routerLink="/list" routerLinkActive="active">List</a>
+  </nav>
+  <button
+    type="button"
+    class="capture-btn"
+    (click)="openCapture()"
+    title="Quick capture (⌘N)"
+    aria-label="Quick capture"
+  >+ <kbd>⌘N</kbd></button>
+</header>
+
+<div class="app-body">
+  <aside class="sidebar" aria-label="Projects">
+    <h2>Projects</h2>
+    <ul>
+      @for (p of projects(); track p.id) {
+        <li>
+          <span class="dot" [style.background]="p.color"></span>
+          <span class="name">{{ p.name }}</span>
+          <span class="count">{{ countFor(p.id) }}</span>
+        </li>
+      } @empty {
+        <li class="empty">no projects yet</li>
+      }
+      <li class="inbox">
+        <span class="name">Inbox</span>
+        <span class="count">{{ countFor(null) }}</span>
+      </li>
+    </ul>
+  </aside>
+
+  <main class="app-main">
+    <router-outlet />
+  </main>
+</div>
+
+@if (captureOpen()) {
+  <app-capture
+    [projects]="projects()"
+    (create)="onCaptureCreate($event)"
+    (cancel)="closeCapture()"
+  />
+}
+
 <div role="status" aria-live="polite" aria-atomic="true" class="sr-only"></div>

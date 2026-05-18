@@ -1,0 +1,120 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(31, 36, 48, 0.35);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  z-index: 100;
+  padding-top: 6rem;
+}
+
+.dialog {
+  background: var(--paper);
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  width: min(34rem, 95%);
+  box-shadow: 0 10px 30px rgba(31, 36, 48, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.dialog h2 {
+  font-family: var(--font-hand);
+  font-size: 1.4rem;
+  margin: 0;
+  color: var(--ink);
+}
+
+.hint {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin: 0;
+}
+
+.hint .example {
+  font-family: var(--font-hand);
+  font-size: 0.95rem;
+  color: var(--ink-2);
+}
+
+.dialog input {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  background: #fff;
+  font: inherit;
+  color: var(--ink);
+}
+
+.preview {
+  display: grid;
+  grid-template-columns: 5rem 1fr;
+  gap: 0.2rem 0.75rem;
+  font-size: 0.85rem;
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px dashed var(--hairline);
+  border-radius: 4px;
+}
+
+.preview dt {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.7rem;
+  align-self: center;
+}
+
+.preview dd {
+  margin: 0;
+  color: var(--ink);
+}
+
+.preview .tag {
+  margin-right: 0.4rem;
+  color: var(--ink-2);
+}
+
+.preview .warn {
+  color: var(--accent);
+  font-size: 0.75rem;
+  margin-left: 0.4rem;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.actions button {
+  border: 1px solid var(--hairline);
+  background: #fff;
+  border-radius: 4px;
+  padding: 0.4rem 0.85rem;
+  font: inherit;
+  cursor: pointer;
+  color: var(--ink);
+}
+
+.actions .primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.actions .primary:disabled {
+  background: var(--muted);
+  border-color: var(--muted);
+  cursor: not-allowed;
+}
+
+.actions .ghost {
+  background: transparent;
+  color: var(--ink-2);
+}
