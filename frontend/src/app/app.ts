@@ -1,5 +1,5 @@
 import { Component, HostListener, computed, inject, signal } from '@angular/core';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
 import { Task } from './models';
 import { TaskStore } from './task-store';
@@ -14,6 +14,7 @@ import { DashboardNav } from './shared/dashboard-nav';
 })
 export class App {
   private store = inject(TaskStore);
+  private router = inject(Router);
 
   // <base href> like "/apps/kanban/" means we're hosted inside the dashboard
   // reverse proxy; show a back-link to "/".
@@ -74,9 +75,22 @@ export class App {
     if ((ke.metaKey || ke.ctrlKey) && ke.key?.toLowerCase() === 'n') {
       ke.preventDefault();
       this.captureOpen.set(true);
+      return;
     }
     if (ke.key === 'Escape' && this.navMenuOpen()) {
       this.navMenuOpen.set(false);
+    }
+    // ⌘F or `/` from anywhere: jump to the Search tab and focus its input.
+    // The browser's default ⌘F (DOM find) is fine to give up — the kanban's
+    // search hits the DB, not the rendered text.
+    const target = ke.target as HTMLElement | null;
+    const inField = !!target?.matches?.('input, textarea, select, [contenteditable="true"]');
+    if ((ke.metaKey || ke.ctrlKey) && ke.key?.toLowerCase() === 'f') {
+      ke.preventDefault();
+      this.router.navigateByUrl('/search');
+    } else if (ke.key === '/' && !inField) {
+      ke.preventDefault();
+      this.router.navigateByUrl('/search');
     }
   }
 

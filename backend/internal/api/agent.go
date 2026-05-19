@@ -26,6 +26,7 @@ type slugInput struct {
 
 type listPlansInput struct {
 	Project string `query:"project" doc:"Filter by project slug" required:"false"`
+	Q       string `query:"q" doc:"Full-text search across plan title and body (FTS5; multi-word = AND)" required:"false"`
 }
 
 type planSummary struct {
@@ -96,7 +97,9 @@ func registerAgentPlans(api huma.API, st *store.Store) {
 				return nil, huma.Error400BadRequest(err.Error())
 			}
 		}
-		ts, err := st.ListPlanTasks(in.Project)
+		ts, err := st.ListPlanTasks(store.PlanFilter{
+			ProjectSlug: in.Project, Query: in.Q,
+		})
 		if err != nil {
 			return nil, storeErr(err)
 		}

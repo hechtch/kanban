@@ -1,8 +1,8 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
+import { Observable, firstValueFrom } from 'rxjs';
 
 import { ApiService } from './api.service';
-import { COLUMN_STATUSES, Project, Status, Task } from './models';
+import { COLUMN_STATUSES, Project, Status, Task, TaskFilter } from './models';
 
 @Injectable({ providedIn: 'root' })
 export class TaskStore {
@@ -32,6 +32,15 @@ export class TaskStore {
   refresh(): void {
     this.api.listProjects().subscribe(p => this._projects.set(p));
     this.api.listTasks().subscribe(t => this._tasks.set(t));
+  }
+
+  /**
+   * One-off filtered query; does NOT mutate the store's `tasks` signal.
+   * Use this from views that want their own filtered slice (search) without
+   * disturbing the board/list's read of the full task set.
+   */
+  query(filter: TaskFilter): Observable<Task[]> {
+    return this.api.listTasks(filter);
   }
 
   async create(input: Partial<Task>): Promise<Task> {

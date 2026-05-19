@@ -11,6 +11,10 @@ export const routes: Routes = [
     loadComponent: () => import('./list/list').then(m => m.List),
   },
   {
+    path: 'search',
+    loadComponent: () => import('./search/search').then(m => m.Search),
+  },
+  {
     path: 'task/:id',
     loadComponent: () => import('./task-view/task-view').then(m => m.TaskView),
   },

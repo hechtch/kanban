@@ -28,8 +28,8 @@ func (s *Store) ListTasks(f TaskFilter) ([]Task, error) {
 		}
 	}
 	if f.Query != "" {
-		where = append(where, "title LIKE ?")
-		args = append(args, "%"+f.Query+"%")
+		where = append(where, "id IN (SELECT rowid FROM task_fts WHERE task_fts MATCH ?)")
+		args = append(args, ftsQuoteQuery(f.Query))
 	}
 
 	q := `SELECT id, title, body, status, priority, due_text, project_id,

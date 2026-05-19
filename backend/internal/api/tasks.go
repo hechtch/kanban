@@ -23,7 +23,7 @@ type taskOutput struct {
 type listTasksInput struct {
 	Status    string `query:"status" doc:"Filter by status (todo/doing/blocked/awaiting_merge/done/backlog)" required:"false"`
 	ProjectID string `query:"project_id" doc:"Filter by project id; pass 'null' for inbox-only tasks" required:"false"`
-	Q         string `query:"q" doc:"Title substring search" required:"false"`
+	Q         string `query:"q" doc:"Full-text search across task title and body (FTS5; multi-word = AND)" required:"false"`
 }
 
 type listTasksOutput struct {

@@ -98,6 +98,9 @@ func (s *Store) migrate() error {
 	if err := s.migrateTaskStatusConstraint(); err != nil {
 		return fmt.Errorf("migrate task status constraint: %w", err)
 	}
+	if err := s.setupTaskFTS(); err != nil {
+		return fmt.Errorf("setup task_fts: %w", err)
+	}
 	// Partial unique indexes: enforce uniqueness only among non-NULL slugs.
 	for _, idx := range []string{
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_task_plan_slug
@@ -186,6 +189,55 @@ func (s *Store) migrateTaskStatusConstraint() error {
 		}
 	}
 	return tx.Commit()
+}
+
+// setupTaskFTS creates the FTS5 virtual table that mirrors task.title and
+// task.body, plus the triggers that keep it in sync. Idempotent — uses
+// IF NOT EXISTS everywhere. On first creation, backfills from existing rows.
+func (s *Store) setupTaskFTS() error {
+	// Was task_fts already created?
+	var existing int
+	if err := s.db.QueryRow(
+		`SELECT COUNT(*) FROM sqlite_schema WHERE type='table' AND name='task_fts'`,
+	).Scan(&existing); err != nil {
+		return err
+	}
+
+	stmts := []string{
+		`CREATE VIRTUAL TABLE IF NOT EXISTS task_fts USING fts5(
+			title, body,
+			content='task', content_rowid='id',
+			tokenize='unicode61 remove_diacritics 2'
+		)`,
+		`CREATE TRIGGER IF NOT EXISTS task_fts_ai AFTER INSERT ON task BEGIN
+			INSERT INTO task_fts(rowid, title, body) VALUES (new.id, new.title, new.body);
+		END`,
+		`CREATE TRIGGER IF NOT EXISTS task_fts_ad AFTER DELETE ON task BEGIN
+			INSERT INTO task_fts(task_fts, rowid, title, body)
+			  VALUES('delete', old.id, old.title, old.body);
+		END`,
+		`CREATE TRIGGER IF NOT EXISTS task_fts_au AFTER UPDATE ON task BEGIN
+			INSERT INTO task_fts(task_fts, rowid, title, body)
+			  VALUES('delete', old.id, old.title, old.body);
+			INSERT INTO task_fts(rowid, title, body) VALUES (new.id, new.title, new.body);
+		END`,
+	}
+	for _, stmt := range stmts {
+		if _, err := s.db.Exec(stmt); err != nil {
+			return fmt.Errorf("exec %q: %w", firstLine(stmt), err)
+		}
+	}
+
+	// On first creation, backfill from existing task rows. Subsequent runs
+	// see existing > 0 and skip this.
+	if existing == 0 {
+		if _, err := s.db.Exec(
+			`INSERT INTO task_fts(rowid, title, body) SELECT id, title, body FROM task`,
+		); err != nil {
+			return fmt.Errorf("backfill task_fts: %w", err)
+		}
+	}
+	return nil
 }
 
 // backfillProjectSlugs derives a slug for any project row that doesn't have

@@ -70,22 +70,46 @@ type queryer interface {
 	QueryRow(query string, args ...any) *sql.Row
 }
 
+// PlanFilter narrows a list-plans request by project and/or text search.
+// An empty PlanFilter returns every plan-owned task.
+type PlanFilter struct {
+	ProjectSlug string
+	Query       string
+}
+
 // ListPlanTasks returns tasks whose plan_slug is set, newest-first.
-// If projectSlug is non-empty, filters to plans belonging to that project
-// (returns ErrNotFound if the project slug doesn't exist).
-func (s *Store) ListPlanTasks(projectSlug ...string) ([]Task, error) {
+// Filters by project_slug (returns ErrNotFound if unknown) and/or by `q`
+// (FTS5 match on title + body).
+//
+// Variadic for backwards compatibility: existing callers pass a single
+// project slug string; new callers can pass a PlanFilter.
+func (s *Store) ListPlanTasks(filter ...any) ([]Task, error) {
+	var f PlanFilter
+	if len(filter) > 0 {
+		switch v := filter[0].(type) {
+		case PlanFilter:
+			f = v
+		case string:
+			f.ProjectSlug = v
+		}
+	}
+
 	q := `SELECT id, title, body, status, priority, due_text, project_id,
 	             sort_order, plan_slug, git_branch,
 	             created_at, updated_at, completed_at
 	        FROM task WHERE plan_slug IS NOT NULL`
 	args := []any{}
-	if len(projectSlug) > 0 && projectSlug[0] != "" {
-		proj, err := s.GetProjectBySlug(projectSlug[0])
+	if f.ProjectSlug != "" {
+		proj, err := s.GetProjectBySlug(f.ProjectSlug)
 		if err != nil {
 			return nil, err
 		}
 		q += " AND project_id = ?"
 		args = append(args, proj.ID)
+	}
+	if f.Query != "" {
+		q += " AND id IN (SELECT rowid FROM task_fts WHERE task_fts MATCH ?)"
+		args = append(args, ftsQuoteQuery(f.Query))
 	}
 	q += " ORDER BY updated_at DESC, id DESC"
 

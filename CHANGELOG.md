@@ -12,6 +12,21 @@ All notable changes to this project will be documented here. Format follows
 
 
 ### Added
+- **Search across title + body** — `?q=foo` on `GET /api/tasks`
+  and `GET /api/agent/plans` now hits a SQLite FTS5 index covering
+  both `task.title` and `task.body`. Multi-word queries are AND'd
+  (`?q=phase%203` finds tasks mentioning both terms anywhere). The
+  old title-only `LIKE` behavior is gone — bodies are usually
+  where the interesting words live now. The FTS5 virtual table is
+  kept in sync via triggers on `task` INSERT/UPDATE/DELETE and is
+  backfilled from existing rows on first migration.
+- **`/search` tab in the UI** — new lazy-loaded route between
+  *List* and the quick-capture button. Big text input (autofocus,
+  200ms debounce), project filter chips, status filter chips,
+  results as a flat scannable list. State lives in the URL
+  (`?q=`, `?project=`, `?status=`), so a search is shareable and
+  survives reload. `⌘F` or `/` from anywhere navigates to
+  `/search` and focuses the input.
 - **OpenAPI 3.1 spec + Swagger UI** — migrated the entire HTTP
   surface to [huma v2](https://github.com/danielgtaylor/huma).
   Each handler is now a typed function `func(ctx, *Input)

@@ -1,0 +1,97 @@
+<div class="search-page">
+  <div class="bar">
+    <input
+      #input
+      class="q-input"
+      type="text"
+      placeholder="Search title and body…"
+      [ngModel]="draftQuery()"
+      (ngModelChange)="onQueryInput($event)"
+      aria-label="Search query"
+    />
+    @if (query() || project() || status()) {
+      <button type="button" class="clear" (click)="clearAll()">clear</button>
+    }
+  </div>
+
+  <div class="facets">
+    <div class="facet">
+      <span class="facet-label">project</span>
+      <button
+        type="button"
+        class="chip"
+        [class.active]="!project()"
+        (click)="setProject('')"
+      >all</button>
+      @for (p of store.projects(); track p.slug) {
+        <button
+          type="button"
+          class="chip"
+          [class.active]="project() === p.slug"
+          (click)="setProject(p.slug)"
+        >
+          <span class="dot" [style.background]="p.color"></span>
+          {{ p.name }}
+        </button>
+      }
+    </div>
+
+    <div class="facet">
+      <span class="facet-label">status</span>
+      <button
+        type="button"
+        class="chip"
+        [class.active]="!status()"
+        (click)="setStatus('')"
+      >any</button>
+      @for (s of statuses; track s) {
+        <button
+          type="button"
+          class="chip"
+          [class.active]="status() === s"
+          (click)="setStatus(s)"
+        >{{ statusLabel(s) }}</button>
+      }
+    </div>
+  </div>
+
+  @if (results(); as rows) {
+    @if (rows.length === 0) {
+      <p class="empty">no tasks {{ filterSummary() }}</p>
+    } @else {
+      <p class="count">{{ rows.length }} {{ rows.length === 1 ? 'task' : 'tasks' }} {{ filterSummary() }}</p>
+      <ul class="rows">
+        @for (t of rows; track t.id) {
+          <li class="row">
+            <a [routerLink]="['/task', t.id]" class="row-link">
+              @if (t.priority > 0) {
+                <span class="prio" [attr.data-prio]="t.priority">{{ '!'.repeat(t.priority) }}</span>
+              }
+              <span class="title">{{ t.title }}</span>
+              <span class="meta">
+                <span class="status" [attr.data-status]="t.status">{{ statusLabel(t.status) }}</span>
+                @if (projectFor(t); as proj) {
+                  <span class="project">
+                    <span class="dot" [style.background]="proj.color"></span>
+                    {{ proj.name }}
+                  </span>
+                }
+                @if (t.git_branch) {
+                  <span class="branch">⎇ {{ t.git_branch }}</span>
+                }
+                @if (t.due_text) {
+                  <span class="due">{{ t.due_text }}</span>
+                }
+                @for (tag of t.tags; track tag) {
+                  <span class="tag">#{{ tag }}</span>
+                }
+              </span>
+            </a>
+          </li>
+        }
+      </ul>
+    }
+  } @else {
+    <p class="loading">searching…</p>
+  }
+</div>
