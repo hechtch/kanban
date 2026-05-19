@@ -39,6 +39,40 @@ import { Project, Task } from '../models';
         }
       </div>
     }
+
+    @if (task.git_branch) {
+      <div class="branch" title="git branch">
+        <svg class="branch-icon" viewBox="0 0 16 16" aria-hidden="true">
+          <circle cx="4" cy="3" r="1.5" fill="none" stroke="currentColor" stroke-width="1.3" />
+          <circle cx="4" cy="13" r="1.5" fill="none" stroke="currentColor" stroke-width="1.3" />
+          <circle cx="12" cy="3" r="1.5" fill="none" stroke="currentColor" stroke-width="1.3" />
+          <path d="M4 4.6 V11.4 M4 8 Q4 5 8 5 H10.5"
+                fill="none" stroke="currentColor" stroke-width="1.3"
+                stroke-linecap="round" />
+        </svg>
+        <span>{{ task.git_branch }}</span>
+      </div>
+    }
+
+    <div class="actor" [class.claude]="isClaude"
+         [attr.title]="isClaude ? 'Claude-owned plan' : 'User-entered task'">
+      @if (isClaude) {
+        <svg class="actor-icon" viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M8 1 Q8.4 6 13 8 Q8.4 10 8 15 Q7.6 10 3 8 Q7.6 6 8 1Z"
+                fill="currentColor" />
+        </svg>
+        <span>Claude</span>
+      } @else {
+        <svg class="actor-icon" viewBox="0 0 16 16" aria-hidden="true">
+          <circle cx="8" cy="5.2" r="2.4" fill="none"
+                  stroke="currentColor" stroke-width="1.3" />
+          <path d="M2.8 14.2 Q2.8 9.2 8 9.2 Q13.2 9.2 13.2 14.2"
+                fill="none" stroke="currentColor"
+                stroke-width="1.3" stroke-linecap="round" />
+        </svg>
+        <span>you</span>
+      }
+    </div>
   `,
   styleUrl: './card.css',
 })
@@ -64,5 +98,9 @@ export class Card {
 
   prioLabel(): string {
     return ['none', 'low', 'medium', 'high'][this.task.priority] ?? '';
+  }
+
+  get isClaude(): boolean {
+    return this.task.plan_slug != null;
   }
 }

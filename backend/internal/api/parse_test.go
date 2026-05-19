@@ -9,12 +9,12 @@ func TestParseDraft(t *testing.T) {
 	cases := []struct {
 		name string
 		in   string
-		want parseOutput
+		want parseDraft
 	}{
 		{
 			name: "full example",
 			in:   "email landlord about the leak by friday !! @admin #ping",
-			want: parseOutput{
+			want: parseDraft{
 				Title:       "email landlord about the leak",
 				Priority:    2,
 				DueText:     "friday",
@@ -25,7 +25,7 @@ func TestParseDraft(t *testing.T) {
 		{
 			name: "ship release",
 			in:   "ship v0.1 !!! by next wk #release",
-			want: parseOutput{
+			want: parseDraft{
 				Title:       "ship v0.1",
 				Priority:    3,
 				DueText:     "next wk",
@@ -35,12 +35,12 @@ func TestParseDraft(t *testing.T) {
 		{
 			name: "plain title",
 			in:   "buy milk",
-			want: parseOutput{Title: "buy milk", Tags: []string{}},
+			want: parseDraft{Title: "buy milk", Tags: []string{}},
 		},
 		{
 			name: "multi-tag dedup",
 			in:   "fix #bug stuff #bug #urgent",
-			want: parseOutput{
+			want: parseDraft{
 				Title: "fix stuff",
 				Tags:  []string{"bug", "urgent"},
 			},
@@ -48,7 +48,7 @@ func TestParseDraft(t *testing.T) {
 		{
 			name: "by-clause swallows trailing tags",
 			in:   "call mom by tomorrow",
-			want: parseOutput{
+			want: parseDraft{
 				Title:   "call mom",
 				DueText: "tomorrow",
 				Tags:    []string{},
@@ -57,9 +57,9 @@ func TestParseDraft(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := parseDraft(tc.in)
+			got := parseText(tc.in)
 			if !reflect.DeepEqual(got, tc.want) {
-				t.Errorf("parseDraft(%q)\n got: %+v\nwant: %+v", tc.in, got, tc.want)
+				t.Errorf("parseText(%q)\n got: %+v\nwant: %+v", tc.in, got, tc.want)
 			}
 		})
 	}

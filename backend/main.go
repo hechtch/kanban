@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/chrishecht/kanban/backend/internal/api"
-	"github.com/chrishecht/kanban/backend/internal/config"
-	"github.com/chrishecht/kanban/backend/internal/store"
+	"github.com/hechtch/kanban/backend/internal/api"
+	"github.com/hechtch/kanban/backend/internal/config"
+	"github.com/hechtch/kanban/backend/internal/store"
 )
 
 func main() {

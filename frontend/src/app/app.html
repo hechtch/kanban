@@ -1,7 +1,4 @@
 <header class="app-header">
-  @if (inDashboard) {
-    <a class="back" href="/">← Dashboard</a>
-  }
   <h1>Kanban</h1>
   <nav class="views" aria-label="View">
     <a routerLink="/board" routerLinkActive="active">Board</a>
@@ -14,12 +11,25 @@
     title="Quick capture (⌘N)"
     aria-label="Quick capture"
   >+ <kbd>⌘N</kbd></button>
+  <app-dashboard-nav
+    [open]="navMenuOpen()"
+    (toggle)="toggleNavMenu($event)" />
 </header>
 
-<div class="app-body">
+<div class="app-body" [class.sidebar-collapsed]="!sidebarOpen()">
   <aside class="sidebar" aria-label="Projects">
-    <h2>Projects</h2>
-    <ul>
+    <div class="sidebar-head">
+      <h2>Projects</h2>
+      <button
+        type="button"
+        class="sidebar-toggle"
+        (click)="toggleSidebar()"
+        [attr.aria-pressed]="sidebarOpen()"
+        [attr.aria-label]="sidebarOpen() ? 'Collapse projects' : 'Expand projects'"
+        [title]="sidebarOpen() ? 'Collapse' : 'Expand'"
+      >{{ sidebarOpen() ? '<<<' : '>>>' }}</button>
+    </div>
+    <ul [attr.aria-hidden]="!sidebarOpen()">
       @for (p of projects(); track p.id) {
         <li>
           <span class="dot" [style.background]="p.color"></span>

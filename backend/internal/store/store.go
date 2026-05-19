@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
@@ -36,15 +37,21 @@ func (s *Store) migrate() error {
 			color       TEXT NOT NULL DEFAULT '#1f2430',
 			sort_order  REAL NOT NULL DEFAULT 0
 		)`,
+		// Status no longer carries a CHECK constraint at the DB level — the
+		// Go layer's validStatus map is the source of truth. Drop-and-rebuild
+		// is the only way to change a CHECK in SQLite, so removing it now
+		// keeps future status renames cheap.
 		`CREATE TABLE IF NOT EXISTS task (
 			id            INTEGER PRIMARY KEY,
 			title         TEXT NOT NULL,
 			body          TEXT NOT NULL DEFAULT '',
-			status        TEXT NOT NULL CHECK (status IN ('todo','doing','waiting','done','backlog')),
+			status        TEXT NOT NULL,
 			priority      INTEGER NOT NULL DEFAULT 0 CHECK (priority BETWEEN 0 AND 3),
 			due_text      TEXT NOT NULL DEFAULT '',
 			project_id    INTEGER REFERENCES project(id) ON DELETE SET NULL,
 			sort_order    REAL NOT NULL DEFAULT 0,
+			plan_slug     TEXT,
+			git_branch    TEXT,
 			created_at    TEXT NOT NULL DEFAULT (datetime('now')),
 			updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
 			completed_at  TEXT
@@ -60,6 +67,16 @@ func (s *Store) migrate() error {
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_task_status ON task(status, sort_order)`,
 		`CREATE INDEX IF NOT EXISTS idx_task_project ON task(project_id, sort_order)`,
+		`CREATE TABLE IF NOT EXISTS activity (
+			id           INTEGER PRIMARY KEY,
+			task_id      INTEGER NOT NULL REFERENCES task(id) ON DELETE CASCADE,
+			ts           TEXT NOT NULL DEFAULT (datetime('now')),
+			kind         TEXT NOT NULL CHECK (kind IN ('create','status','note','git')),
+			from_status  TEXT,
+			to_status    TEXT,
+			text         TEXT NOT NULL DEFAULT ''
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_activity_task ON activity(task_id, ts)`,
 	}
 	for _, stmt := range stmts {
 		if _, err := s.db.Exec(stmt); err != nil {
@@ -68,6 +85,138 @@ func (s *Store) migrate() error {
 	}
 	if err := s.addColumnIfMissing("task", "body", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
+	}
+	if err := s.addColumnIfMissing("task", "plan_slug", "TEXT"); err != nil {
+		return err
+	}
+	if err := s.addColumnIfMissing("task", "git_branch", "TEXT"); err != nil {
+		return err
+	}
+	if err := s.addColumnIfMissing("project", "slug", "TEXT"); err != nil {
+		return err
+	}
+	if err := s.migrateTaskStatusConstraint(); err != nil {
+		return fmt.Errorf("migrate task status constraint: %w", err)
+	}
+	// Partial unique indexes: enforce uniqueness only among non-NULL slugs.
+	for _, idx := range []string{
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_task_plan_slug
+		   ON task(plan_slug) WHERE plan_slug IS NOT NULL`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_project_slug
+		   ON project(slug) WHERE slug IS NOT NULL`,
+	} {
+		if _, err := s.db.Exec(idx); err != nil {
+			return fmt.Errorf("create index: %w", err)
+		}
+	}
+	if err := s.backfillProjectSlugs(); err != nil {
+		return fmt.Errorf("backfill project slugs: %w", err)
+	}
+	return nil
+}
+
+// migrateTaskStatusConstraint relaxes the old CHECK (status IN (...)) on
+// task and renames 'waiting' → 'blocked'. The rebuild also drops the
+// constraint entirely so future status changes only need a Go-side update.
+// Idempotent: if the current schema has no status CHECK clause, this is a
+// no-op.
+func (s *Store) migrateTaskStatusConstraint() error {
+	var schemaSQL string
+	if err := s.db.QueryRow(
+		`SELECT sql FROM sqlite_schema WHERE type='table' AND name='task'`,
+	).Scan(&schemaSQL); err != nil {
+		return err
+	}
+	if !strings.Contains(schemaSQL, "CHECK (status IN") &&
+		!strings.Contains(schemaSQL, "CHECK(status IN") {
+		// New-schema DBs and already-migrated DBs: nothing to do.
+		return nil
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.Exec(`CREATE TABLE task_new (
+		id            INTEGER PRIMARY KEY,
+		title         TEXT NOT NULL,
+		body          TEXT NOT NULL DEFAULT '',
+		status        TEXT NOT NULL,
+		priority      INTEGER NOT NULL DEFAULT 0 CHECK (priority BETWEEN 0 AND 3),
+		due_text      TEXT NOT NULL DEFAULT '',
+		project_id    INTEGER REFERENCES project(id) ON DELETE SET NULL,
+		sort_order    REAL NOT NULL DEFAULT 0,
+		plan_slug     TEXT,
+		git_branch    TEXT,
+		created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+		updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+		completed_at  TEXT
+	)`); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`
+		INSERT INTO task_new (id, title, body, status, priority, due_text,
+		                     project_id, sort_order, plan_slug, git_branch,
+		                     created_at, updated_at, completed_at)
+		SELECT id, title, body, status, priority, due_text,
+		       project_id, sort_order, plan_slug, git_branch,
+		       created_at, updated_at, completed_at
+		  FROM task`); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DROP TABLE task`); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`ALTER TABLE task_new RENAME TO task`); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`UPDATE task SET status = 'blocked' WHERE status = 'waiting'`); err != nil {
+		return err
+	}
+	// Indexes were tied to the dropped table; recreate them.
+	for _, idx := range []string{
+		`CREATE INDEX idx_task_status ON task(status, sort_order)`,
+		`CREATE INDEX idx_task_project ON task(project_id, sort_order)`,
+		`CREATE UNIQUE INDEX idx_task_plan_slug ON task(plan_slug) WHERE plan_slug IS NOT NULL`,
+	} {
+		if _, err := tx.Exec(idx); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// backfillProjectSlugs derives a slug for any project row that doesn't have
+// one yet (rows created before the column existed). Idempotent.
+func (s *Store) backfillProjectSlugs() error {
+	rows, err := s.db.Query(`SELECT id, name FROM project WHERE slug IS NULL OR slug = ''`)
+	if err != nil {
+		return err
+	}
+	type pending struct {
+		id   int64
+		name string
+	}
+	var todo []pending
+	for rows.Next() {
+		var p pending
+		if err := rows.Scan(&p.id, &p.name); err != nil {
+			rows.Close()
+			return err
+		}
+		todo = append(todo, p)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, p := range todo {
+		slug := uniqueProjectSlug(s.db, Slugify(p.name), p.id)
+		if _, err := s.db.Exec(`UPDATE project SET slug = ? WHERE id = ?`, slug, p.id); err != nil {
+			return err
+		}
 	}
 	return nil
 }

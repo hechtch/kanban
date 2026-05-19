@@ -1,161 +1,177 @@
 package api
 
 import (
-	"encoding/json"
+	"context"
 	"net/http"
 	"strconv"
 
-	"github.com/chrishecht/kanban/backend/internal/store"
+	"github.com/danielgtaylor/huma/v2"
+
+	"github.com/hechtch/kanban/backend/internal/store"
 )
 
-func listTasks(st *store.Store) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		f := store.TaskFilter{
-			Status: r.URL.Query().Get("status"),
-			Query:  r.URL.Query().Get("q"),
-		}
-		if raw := r.URL.Query().Get("project_id"); raw != "" {
+// ─── inputs / outputs ───────────────────────────────────────────────────
+
+type taskIDInput struct {
+	ID int64 `path:"id" doc:"Task ID"`
+}
+
+type taskOutput struct {
+	Body store.Task
+}
+
+type listTasksInput struct {
+	Status    string `query:"status" doc:"Filter by status (todo/doing/blocked/awaiting_merge/done/backlog)" required:"false"`
+	ProjectID string `query:"project_id" doc:"Filter by project id; pass 'null' for inbox-only tasks" required:"false"`
+	Q         string `query:"q" doc:"Title substring search" required:"false"`
+}
+
+type listTasksOutput struct {
+	Body []store.Task
+}
+
+// createTaskInput accepts only the writable fields. id / sort_order /
+// created_at / updated_at / completed_at / plan_slug are server-managed.
+type createTaskInput struct {
+	Body struct {
+		Title     string   `json:"title" doc:"Task title (required)"`
+		Body      string   `json:"body,omitempty" doc:"Markdown body"`
+		Status    string   `json:"status,omitempty" doc:"todo / doing / blocked / awaiting_merge / done / backlog (default: todo)"`
+		Priority  int      `json:"priority,omitempty" doc:"0–3"`
+		DueText   string   `json:"due_text,omitempty"`
+		ProjectID *int64   `json:"project_id,omitempty"`
+		SortOrder float64  `json:"sort_order,omitempty"`
+		Tags      []string `json:"tags,omitempty"`
+		GitBranch *string  `json:"git_branch,omitempty"`
+	}
+}
+
+// patchTaskInput models the wire shape directly, using Optional[T] on fields
+// where absent-vs-null matters (project_id today; others could later).
+type patchTaskInput struct {
+	ID   int64 `path:"id"`
+	Body struct {
+		Title     *string         `json:"title,omitempty"`
+		Body      *string         `json:"body,omitempty"`
+		Status    *string         `json:"status,omitempty" doc:"todo / doing / blocked / awaiting_merge / done / backlog"`
+		Priority  *int            `json:"priority,omitempty" doc:"0–3"`
+		DueText   *string         `json:"due_text,omitempty"`
+		ProjectID Optional[int64] `json:"project_id,omitempty" doc:"Project id, or null to clear, or omit to leave alone"`
+		SortOrder *float64        `json:"sort_order,omitempty"`
+		Tags      *[]string       `json:"tags,omitempty"`
+		GitBranch Optional[string] `json:"git_branch,omitempty" doc:"Branch carrying the work, or null to clear"`
+	}
+}
+
+// ─── handlers ───────────────────────────────────────────────────────────
+
+func registerTasks(api huma.API, st *store.Store) {
+	huma.Register(api, huma.Operation{
+		OperationID: "list-tasks",
+		Method:      http.MethodGet,
+		Path:        "/api/tasks",
+		Summary:     "List tasks (filtered)",
+		Tags:        []string{"Tasks"},
+	}, func(_ context.Context, in *listTasksInput) (*listTasksOutput, error) {
+		f := store.TaskFilter{Status: in.Status, Query: in.Q}
+		if in.ProjectID != "" {
 			f.HasProj = true
-			if raw == "null" || raw == "0" {
+			if in.ProjectID == "null" || in.ProjectID == "0" {
 				f.ProjectID = nil
 			} else {
-				id, err := strconv.ParseInt(raw, 10, 64)
+				id, err := strconv.ParseInt(in.ProjectID, 10, 64)
 				if err != nil {
-					writeErr(w, http.StatusBadRequest, "invalid project_id")
-					return
+					return nil, huma.Error400BadRequest("invalid project_id")
 				}
 				f.ProjectID = &id
 			}
 		}
 		ts, err := st.ListTasks(f)
 		if err != nil {
-			writeErr(w, http.StatusInternalServerError, err.Error())
-			return
+			return nil, huma.Error500InternalServerError("list tasks", err)
 		}
-		writeJSON(w, http.StatusOK, ts)
-	}
-}
+		return &listTasksOutput{Body: ts}, nil
+	})
 
-func createTask(st *store.Store) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var t store.Task
-		if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
-			writeErr(w, http.StatusBadRequest, err.Error())
-			return
+	huma.Register(api, huma.Operation{
+		OperationID:   "create-task",
+		Method:        http.MethodPost,
+		Path:          "/api/tasks",
+		Summary:       "Create a task",
+		Tags:          []string{"Tasks"},
+		DefaultStatus: http.StatusCreated,
+	}, func(_ context.Context, in *createTaskInput) (*taskOutput, error) {
+		t := store.Task{
+			Title:     in.Body.Title,
+			Body:      in.Body.Body,
+			Status:    in.Body.Status,
+			Priority:  in.Body.Priority,
+			DueText:   in.Body.DueText,
+			ProjectID: in.Body.ProjectID,
+			SortOrder: in.Body.SortOrder,
+			Tags:      in.Body.Tags,
+			GitBranch: in.Body.GitBranch,
 		}
 		out, err := st.CreateTask(t)
 		if err != nil {
-			writeErr(w, http.StatusBadRequest, err.Error())
-			return
+			return nil, huma.Error422UnprocessableEntity(err.Error())
 		}
-		writeJSON(w, http.StatusCreated, out)
-	}
-}
+		return &taskOutput{Body: out}, nil
+	})
 
-// Decode into a raw map first so we can tell "project_id absent" from
-// "project_id: null" — the former leaves the value alone, the latter clears it.
-func patchTask(st *store.Store) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(r)
-		if !ok {
-			writeErr(w, http.StatusBadRequest, "invalid id")
-			return
+	huma.Register(api, huma.Operation{
+		OperationID: "patch-task",
+		Method:      http.MethodPatch,
+		Path:        "/api/tasks/{id}",
+		Summary:     "Update a task (partial)",
+		Description: "Distinguishes absent fields (left alone) from explicit null on `project_id` / `git_branch` (cleared).",
+		Tags:        []string{"Tasks"},
+	}, func(_ context.Context, in *patchTaskInput) (*taskOutput, error) {
+		patch := store.TaskPatch{
+			Title:    in.Body.Title,
+			Body:     in.Body.Body,
+			Status:   in.Body.Status,
+			Priority: in.Body.Priority,
+			DueText:  in.Body.DueText,
+			SortOrder: in.Body.SortOrder,
+			Tags:     in.Body.Tags,
 		}
-		raw := map[string]json.RawMessage{}
-		if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
-			writeErr(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		patch, err := buildTaskPatch(raw)
-		if err != nil {
-			writeErr(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		out, err := st.UpdateTask(id, patch)
-		if err != nil {
-			writeErr(w, errStatus(err), err.Error())
-			return
-		}
-		writeJSON(w, http.StatusOK, out)
-	}
-}
-
-func deleteTask(st *store.Store) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(r)
-		if !ok {
-			writeErr(w, http.StatusBadRequest, "invalid id")
-			return
-		}
-		if err := st.DeleteTask(id); err != nil {
-			writeErr(w, errStatus(err), err.Error())
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	}
-}
-
-func buildTaskPatch(raw map[string]json.RawMessage) (store.TaskPatch, error) {
-	var p store.TaskPatch
-	if v, ok := raw["title"]; ok {
-		var s string
-		if err := json.Unmarshal(v, &s); err != nil {
-			return p, err
-		}
-		p.Title = &s
-	}
-	if v, ok := raw["body"]; ok {
-		var s string
-		if err := json.Unmarshal(v, &s); err != nil {
-			return p, err
-		}
-		p.Body = &s
-	}
-	if v, ok := raw["status"]; ok {
-		var s string
-		if err := json.Unmarshal(v, &s); err != nil {
-			return p, err
-		}
-		p.Status = &s
-	}
-	if v, ok := raw["priority"]; ok {
-		var n int
-		if err := json.Unmarshal(v, &n); err != nil {
-			return p, err
-		}
-		p.Priority = &n
-	}
-	if v, ok := raw["due_text"]; ok {
-		var s string
-		if err := json.Unmarshal(v, &s); err != nil {
-			return p, err
-		}
-		p.DueText = &s
-	}
-	if v, ok := raw["project_id"]; ok {
-		if string(v) == "null" {
-			p.ClearProjectID = true
-		} else {
-			var n int64
-			if err := json.Unmarshal(v, &n); err != nil {
-				return p, err
+		if in.Body.ProjectID.Present {
+			if in.Body.ProjectID.Null {
+				patch.ClearProjectID = true
+			} else {
+				v := in.Body.ProjectID.Value
+				patch.ProjectID = &v
 			}
-			p.ProjectID = &n
 		}
-	}
-	if v, ok := raw["sort_order"]; ok {
-		var f float64
-		if err := json.Unmarshal(v, &f); err != nil {
-			return p, err
+		if in.Body.GitBranch.Present {
+			if in.Body.GitBranch.Null {
+				patch.ClearGitBranch = true
+			} else {
+				v := in.Body.GitBranch.Value
+				patch.GitBranch = &v
+			}
 		}
-		p.SortOrder = &f
-	}
-	if v, ok := raw["tags"]; ok {
-		var ts []string
-		if err := json.Unmarshal(v, &ts); err != nil {
-			return p, err
+		out, err := st.UpdateTask(in.ID, patch)
+		if err != nil {
+			return nil, storeErr(err)
 		}
-		p.Tags = &ts
-	}
-	return p, nil
+		return &taskOutput{Body: out}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "delete-task",
+		Method:        http.MethodDelete,
+		Path:          "/api/tasks/{id}",
+		Summary:       "Delete a task",
+		Tags:          []string{"Tasks"},
+		DefaultStatus: http.StatusNoContent,
+	}, func(_ context.Context, in *taskIDInput) (*struct{}, error) {
+		if err := st.DeleteTask(in.ID); err != nil {
+			return nil, storeErr(err)
+		}
+		return nil, nil
+	})
+
+	registerParse(api, st)
 }

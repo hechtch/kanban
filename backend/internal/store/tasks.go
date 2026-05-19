@@ -8,7 +8,8 @@ import (
 )
 
 var validStatus = map[string]bool{
-	"todo": true, "doing": true, "waiting": true, "done": true, "backlog": true,
+	"todo": true, "doing": true, "blocked": true,
+	"awaiting_merge": true, "done": true, "backlog": true,
 }
 
 func (s *Store) ListTasks(f TaskFilter) ([]Task, error) {
@@ -32,7 +33,7 @@ func (s *Store) ListTasks(f TaskFilter) ([]Task, error) {
 	}
 
 	q := `SELECT id, title, body, status, priority, due_text, project_id,
-	       sort_order, created_at, updated_at, completed_at
+	       sort_order, plan_slug, git_branch, created_at, updated_at, completed_at
 	       FROM task`
 	if len(where) > 0 {
 		q += " WHERE " + strings.Join(where, " AND ")
@@ -75,7 +76,7 @@ func (s *Store) ListTasks(f TaskFilter) ([]Task, error) {
 func (s *Store) GetTask(id int64) (Task, error) {
 	row := s.db.QueryRow(
 		`SELECT id, title, body, status, priority, due_text, project_id,
-		        sort_order, created_at, updated_at, completed_at
+		        sort_order, plan_slug, git_branch, created_at, updated_at, completed_at
 		   FROM task WHERE id = ?`, id,
 	)
 	t, err := scanTask(row)
@@ -117,9 +118,10 @@ func (s *Store) CreateTask(t Task) (Task, error) {
 	defer func() { _ = tx.Rollback() }()
 
 	res, err := tx.Exec(
-		`INSERT INTO task (title, body, status, priority, due_text, project_id, sort_order)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO task (title, body, status, priority, due_text, project_id, sort_order, git_branch)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		t.Title, t.Body, t.Status, t.Priority, t.DueText, t.ProjectID, t.SortOrder,
+		nullStr(t.GitBranch),
 	)
 	if err != nil {
 		return Task{}, err
@@ -187,6 +189,12 @@ func (s *Store) UpdateTask(id int64, patch TaskPatch) (Task, error) {
 		sets = append(sets, "sort_order = ?")
 		args = append(args, *patch.SortOrder)
 	}
+	if patch.ClearGitBranch {
+		sets = append(sets, "git_branch = NULL")
+	} else if patch.GitBranch != nil {
+		sets = append(sets, "git_branch = ?")
+		args = append(args, *patch.GitBranch)
+	}
 
 	if len(sets) > 0 {
 		sets = append(sets, "updated_at = datetime('now')")
@@ -233,14 +241,21 @@ type rowScanner interface {
 func scanTask(r rowScanner) (Task, error) {
 	var t Task
 	var projID sql.NullInt64
-	var completedAt sql.NullString
+	var planSlug, gitBranch, completedAt sql.NullString
 	err := r.Scan(&t.ID, &t.Title, &t.Body, &t.Status, &t.Priority, &t.DueText,
-		&projID, &t.SortOrder, &t.CreatedAt, &t.UpdatedAt, &completedAt)
+		&projID, &t.SortOrder, &planSlug, &gitBranch,
+		&t.CreatedAt, &t.UpdatedAt, &completedAt)
 	if err != nil {
 		return Task{}, err
 	}
 	if projID.Valid {
 		t.ProjectID = &projID.Int64
+	}
+	if planSlug.Valid {
+		t.PlanSlug = &planSlug.String
+	}
+	if gitBranch.Valid {
+		t.GitBranch = &gitBranch.String
 	}
 	if completedAt.Valid {
 		t.CompletedAt = &completedAt.String

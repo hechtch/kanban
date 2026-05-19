@@ -11,7 +11,7 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
-import { COLUMN_STATUSES, Project, Status, Task } from '../models';
+import { COLUMN_STATUSES, Project, Status, STATUS_LABEL, Task } from '../models';
 
 @Component({
   selector: 'app-task-modal',
@@ -45,7 +45,7 @@ import { COLUMN_STATUSES, Project, Status, Task } from '../models';
             <label [attr.for]="ids.status">Status</label>
             <select [id]="ids.status" [(ngModel)]="draft.status" name="status">
               @for (s of statuses; track s) {
-                <option [value]="s">{{ s }}</option>
+                <option [value]="s">{{ statusLabel(s) }}</option>
               }
             </select>
           </div>
@@ -118,6 +118,10 @@ export class TaskModal implements OnInit, AfterViewInit {
   @ViewChild('firstFocus', { static: true }) firstFocus!: ElementRef<HTMLInputElement>;
 
   readonly statuses = [...COLUMN_STATUSES, 'backlog' as Status];
+
+  statusLabel(s: Status): string {
+    return STATUS_LABEL[s];
+  }
   readonly titleId = `task-modal-${Math.random().toString(36).slice(2, 9)}`;
   readonly ids = {
     title: `${this.titleId}-title`,

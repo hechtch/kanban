@@ -1,33 +1,38 @@
 .board {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1rem;
-  padding: 1rem;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.6rem;
+  padding: 0.75rem;
 }
 
 .column {
   background: var(--paper);
   border: 1px solid var(--hairline);
   border-radius: 6px;
-  padding: 0.75rem;
+  padding: 0.55rem;
   display: flex;
   flex-direction: column;
   min-height: 12rem;
+  min-width: 0;
 }
 
 .col-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.4rem;
+  gap: 0.25rem;
 }
 
 .col-head h2 {
   font-family: var(--font-hand);
-  font-size: 1.4rem;
+  font-size: 1.2rem;
   margin: 0;
   text-transform: capitalize;
   color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .count {

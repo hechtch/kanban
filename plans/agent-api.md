@@ -165,27 +165,28 @@ disconnected from the agent layer:
 ## Phased checklist
 
 ### Phase 1 — Schema + slug plumbing
-- [ ] Add `plan_slug` column to `task` with a unique index allowing
+- [x] Add `plan_slug` column to `task` with a unique index allowing
       NULL.
 - [ ] Add `git_branch`, `git_uncommitted`, `git_unpushed`,
       `git_merged_into` columns to `task`.
-- [ ] Add `activity` table + migration.
-- [ ] `internal/store` helpers: `UpsertByPlanSlug`, `SetStatus`,
-      `SetGitState`, `AppendActivity`, `GetByPlanSlug`.
+- [x] Add `activity` table + migration.
+- [x] `internal/store` helpers: `UpsertPlan`, `SetPlanStatus`,
+      `AppendPlanNote`, `GetTaskByPlanSlug`, `ListPlanActivity`,
+      `ListPlanTasks`. (`SetGitState` deferred to phase 3.)
 
 ### Phase 2 — Agent endpoints
 - [ ] `GET /api/agent` manifest.
-- [ ] `GET /api/agent/plans` + `GET /api/agent/plans/:slug`.
-- [ ] `PUT /api/agent/plans/:slug` (upsert metadata).
-- [ ] `PUT /api/agent/plans/:slug/status` with activity write.
+- [x] `GET /api/agent/plans` + `GET /api/agent/plans/:slug`.
+- [x] `PUT /api/agent/plans/:slug` (upsert metadata + body).
+- [x] `PUT /api/agent/plans/:slug/status` with activity write.
 - [ ] `PUT /api/agent/plans/:slug/git` with activity write on
       changes.
-- [ ] `POST /api/agent/plans/:slug/notes`.
-- [ ] `GET /api/agent/plans/:slug/activity`.
-- [ ] Table tests covering: first-touch upsert, idempotent same-
-      status PUT, status transitions write activity, git PUT only
-      writes activity when something changed, unknown slug on `GET`
-      returns 404, invalid status returns 422.
+- [x] `POST /api/agent/plans/:slug/notes`.
+- [x] `GET /api/agent/plans/:slug/activity`.
+- [x] Table tests covering: first-touch upsert, idempotent same-
+      status PUT, status transitions write activity, unknown slug
+      on `GET` returns 404, invalid status returns 422.
+      (Git-PUT test deferred with the git endpoints.)
 
 ### Phase 3 — Board surface
 - [ ] Card chip when `plan_slug` is set.

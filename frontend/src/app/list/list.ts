@@ -1,7 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
-import { COLUMN_STATUSES, Project, Status, Task } from '../models';
+import { COLUMN_STATUSES, Project, Status, STATUS_LABEL, Task } from '../models';
 import { TaskStore } from '../task-store';
 
 interface Group {
@@ -31,6 +31,10 @@ export class List {
 
   readonly statuses = [...COLUMN_STATUSES, 'backlog' as Status];
   readonly projects = this.store.projects;
+
+  statusLabel(s: Status): string {
+    return STATUS_LABEL[s];
+  }
   readonly editing = signal<Editing | null>(null);
 
   groups = computed<Group[]>(() => {
@@ -95,7 +99,7 @@ export class List {
 function sortKey(a: Task, b: Task): number {
   // Group by status order, then sort_order, then id.
   const order: Record<Status, number> = {
-    todo: 0, doing: 1, waiting: 2, backlog: 3, done: 4,
+    todo: 0, doing: 1, blocked: 2, awaiting_merge: 3, backlog: 4, done: 5,
   };
   return order[a.status] - order[b.status] || a.sort_order - b.sort_order || a.id - b.id;
 }

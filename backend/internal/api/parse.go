@@ -1,12 +1,14 @@
 package api
 
 import (
-	"encoding/json"
+	"context"
 	"net/http"
 	"regexp"
 	"strings"
 
-	"github.com/chrishecht/kanban/backend/internal/store"
+	"github.com/danielgtaylor/huma/v2"
+
+	"github.com/hechtch/kanban/backend/internal/store"
 )
 
 // Examples:
@@ -20,13 +22,16 @@ var (
 	reProject  = regexp.MustCompile(`(?:^|\s)@([\p{L}\p{N}_-]+)`)
 	rePriority = regexp.MustCompile(`(?:^|\s)(!{1,3})(?:\s|$)`)
 	reDue      = regexp.MustCompile(`(?i)\s+by\s+(.+?)\s*$`)
+	reSpaces   = regexp.MustCompile(`\s+`)
 )
 
 type parseInput struct {
-	Text string `json:"text"`
+	Body struct {
+		Text string `json:"text" doc:"Natural-language task draft, e.g. 'email landlord by friday !! @admin #ping'"`
+	}
 }
 
-type parseOutput struct {
+type parseDraft struct {
 	Title       string   `json:"title"`
 	Priority    int      `json:"priority"`
 	DueText     string   `json:"due_text"`
@@ -35,40 +40,45 @@ type parseOutput struct {
 	ProjectID   *int64   `json:"project_id"`
 }
 
-func parseTask(st *store.Store) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var in parseInput
-		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-			writeErr(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		out := parseDraft(in.Text)
+type parseOutput struct {
+	Body parseDraft
+}
 
-		if out.ProjectName != "" {
+func registerParse(api huma.API, st *store.Store) {
+	huma.Register(api, huma.Operation{
+		OperationID: "parse-task",
+		Method:      http.MethodPost,
+		Path:        "/api/tasks/parse",
+		Summary:     "Parse a natural-language task draft",
+		Description: "Returns a draft (no persistence). `@project` resolves to `project_id` when the name matches an existing project.",
+		Tags:        []string{"Tasks"},
+	}, func(_ context.Context, in *parseInput) (*parseOutput, error) {
+		draft := parseText(in.Body.Text)
+		if draft.ProjectName != "" {
 			projects, err := st.ListProjects()
 			if err == nil {
-				lower := strings.ToLower(out.ProjectName)
+				lower := strings.ToLower(draft.ProjectName)
 				for _, p := range projects {
 					if strings.ToLower(p.Name) == lower {
 						id := p.ID
-						out.ProjectID = &id
+						draft.ProjectID = &id
 						break
 					}
 				}
 			}
 		}
-		writeJSON(w, http.StatusOK, out)
-	}
+		return &parseOutput{Body: draft}, nil
+	})
 }
 
-func parseDraft(raw string) parseOutput {
+// parseText is the pure-parsing core, exported package-internal so the test
+// suite can exercise it without a store.
+func parseText(raw string) parseDraft {
 	text := raw
 
 	// Strip tags / project / priority first — they're anchored on their own
 	// sigils. Pull the trailing "by …" clause LAST so it only sweeps up plain
 	// words at the end, never a stray tag like "#release".
-
-	// tags
 	tags := []string{}
 	seen := map[string]bool{}
 	if matches := reTag.FindAllStringSubmatchIndex(text, -1); matches != nil {
@@ -82,22 +92,18 @@ func parseDraft(raw string) parseOutput {
 		text = reTag.ReplaceAllString(text, "")
 	}
 
-	// project (first @mention wins)
 	project := ""
 	if m := reProject.FindStringSubmatchIndex(text); m != nil {
 		project = text[m[2]:m[3]]
 		text = reProject.ReplaceAllString(text, "")
 	}
 
-	// priority — count bangs
 	priority := 0
 	if m := rePriority.FindStringSubmatchIndex(text); m != nil {
 		priority = m[3] - m[2]
 		text = rePriority.ReplaceAllString(text, " ")
 	}
 
-	// due — must run after the sigil-stripping so leftover sigils never end
-	// up inside due_text.
 	due := ""
 	if m := reDue.FindStringSubmatchIndex(text); m != nil {
 		due = strings.TrimSpace(text[m[2]:m[3]])
@@ -106,7 +112,7 @@ func parseDraft(raw string) parseOutput {
 
 	title := strings.TrimSpace(reSpaces.ReplaceAllString(text, " "))
 
-	return parseOutput{
+	return parseDraft{
 		Title:       title,
 		Priority:    priority,
 		DueText:     due,
@@ -114,5 +120,3 @@ func parseDraft(raw string) parseOutput {
 		ProjectName: project,
 	}
 }
-
-var reSpaces = regexp.MustCompile(`\s+`)

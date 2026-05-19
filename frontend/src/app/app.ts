@@ -4,10 +4,11 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { Task } from './models';
 import { TaskStore } from './task-store';
 import { Capture } from './task-modal/capture';
+import { DashboardNav } from './shared/dashboard-nav';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, Capture],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, Capture, DashboardNav],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
@@ -21,6 +22,27 @@ export class App {
 
   readonly projects = this.store.projects;
   readonly captureOpen = signal(false);
+  readonly navMenuOpen = signal(false);
+  readonly sidebarOpen = signal(this.loadSidebarOpen());
+
+  toggleNavMenu(_: MouseEvent): void {
+    this.navMenuOpen.update(v => !v);
+  }
+
+  private loadSidebarOpen(): boolean {
+    try {
+      const v = localStorage.getItem('kanban-sidebar-open');
+      return v === null ? true : v === '1';
+    } catch {
+      return true;
+    }
+  }
+
+  toggleSidebar(): void {
+    const next = !this.sidebarOpen();
+    this.sidebarOpen.set(next);
+    try { localStorage.setItem('kanban-sidebar-open', next ? '1' : '0'); } catch { /* ignore */ }
+  }
 
   readonly countByProject = computed(() => {
     const counts = new Map<number | null, number>();
@@ -53,5 +75,13 @@ export class App {
       ke.preventDefault();
       this.captureOpen.set(true);
     }
+    if (ke.key === 'Escape' && this.navMenuOpen()) {
+      this.navMenuOpen.set(false);
+    }
+  }
+
+  @HostListener('document:click')
+  onDocumentClick(): void {
+    if (this.navMenuOpen()) this.navMenuOpen.set(false);
   }
 }

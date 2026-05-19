@@ -32,7 +32,7 @@
         <dd>
           <select [ngModel]="t.status" (ngModelChange)="setStatus($event)">
             @for (s of statuses; track s) {
-              <option [value]="s">{{ s }}</option>
+              <option [value]="s">{{ statusLabel(s) }}</option>
             }
           </select>
         </dd>

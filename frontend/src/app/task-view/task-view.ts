@@ -15,7 +15,7 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { map } from 'rxjs';
 
-import { COLUMN_STATUSES, Project, Status, Task } from '../models';
+import { COLUMN_STATUSES, Project, Status, STATUS_LABEL, Task } from '../models';
 import { TaskStore } from '../task-store';
 import { renderMarkdown } from './markdown';
 
@@ -34,6 +34,10 @@ export class TaskView {
   private sanitizer = inject(DomSanitizer);
 
   readonly statuses: Status[] = [...COLUMN_STATUSES, 'backlog'];
+
+  statusLabel(s: Status): string {
+    return STATUS_LABEL[s];
+  }
   readonly priorities = [0, 1, 2, 3] as const;
 
   private readonly idSig = toSignal(

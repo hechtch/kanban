@@ -6,7 +6,7 @@
   @for (col of columns; track col) {
     <section class="column" [attr.aria-label]="col + ' column'">
       <header class="col-head">
-        <h2>{{ col }}</h2>
+        <h2>{{ statusLabel(col) }}</h2>
         <span class="count">{{ tasksFor(col).length }}</span>
       </header>
 
@@ -72,7 +72,7 @@
         role="menuitem"
         [disabled]="menu()!.task.status === s"
         (click)="setStatus(menu()!.task, s); closeMenu()"
-      >→ {{ s }}</button>
+      >→ {{ statusLabel(s) }}</button>
     }
     <hr />
     @for (p of [1, 2, 3, 0]; track p) {

@@ -16,7 +16,7 @@ import {
   CdkDropListGroup,
 } from '@angular/cdk/drag-drop';
 
-import { COLUMN_STATUSES, Project, Status, Task } from '../models';
+import { COLUMN_STATUSES, Project, Status, STATUS_LABEL, Task } from '../models';
 import { TaskStore } from '../task-store';
 import { Card } from './card';
 import { TaskModal } from '../task-modal/task-modal';
@@ -46,12 +46,16 @@ export class Board {
   private router = inject(Router);
 
   readonly columns: Status[] = COLUMN_STATUSES;
+
+  statusLabel(s: Status): string {
+    return STATUS_LABEL[s];
+  }
   readonly projectsSig = this.store.projects;
 
   readonly menu = signal<MenuState | null>(null);
   readonly creating = signal<{ status: Status } | null>(null);
   readonly quickAdd = signal<Record<Status, string>>({
-    todo: '', doing: '', waiting: '', done: '', backlog: '',
+    todo: '', doing: '', blocked: '', awaiting_merge: '', done: '', backlog: '',
   });
 
   private readonly projectsById = computed(() => {
