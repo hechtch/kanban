@@ -3,7 +3,7 @@ import { ActivatedRoute, Router, RouterLink, RouterLinkActive, RouterOutlet } fr
 import { toSignal } from '@angular/core/rxjs-interop';
 import { map } from 'rxjs';
 
-import { Project, Task } from './models';
+import { Assignee, Project, Task } from './models';
 import { TaskStore } from './task-store';
 import { Capture } from './task-modal/capture';
 import { DashboardNav } from './shared/dashboard-nav';
@@ -127,12 +127,6 @@ export class App {
     this.returnToBoard();
   }
 
-  selectAll(): void {
-    this.store.setProjectFilter(undefined);
-    this.rangeAnchor = undefined;
-    this.returnToBoard();
-  }
-
   /** Rows as they appear in the sidebar: projects, Inbox, then any unfolded archived ones. */
   private sidebarOrder(): (number | null)[] {
     const archived = this.archivedOpen() ? this.archivedProjects().map(p => p.id) : [];
@@ -179,8 +173,9 @@ export class App {
     this.returnToBoard();
   }
 
-  /** The segmented control has already set the filter; just follow it. */
-  onAssigneePicked(): void {
+  /** The control has already set (or cleared) the filter; just follow it. */
+  onAssigneePicked(who: Assignee | undefined): void {
+    if (who === undefined) this.rangeAnchor = undefined;
     this.returnToBoard();
   }
 

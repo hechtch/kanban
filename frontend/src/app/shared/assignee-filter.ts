@@ -1,8 +1,9 @@
-// The you/Claude split, as a compact segmented control pinned at the top of
-// the sidebar. Deliberately not a list like Projects and Tags: assignee is a
-// fixed two-value axis that never grows, and it's the most-flipped filter in
-// a board whose whole premise is agent-tracked plans — so it shouldn't be
-// queued below two lists that do grow.
+// The filter-reset row at the top of the project list: "All" clears every
+// filter, and the you/Claude segments beside it flip the assignee axis.
+// The two lived as separate rows at first — a segmented All above the
+// project list's own All — which just read as two ways to say "stop
+// filtering". Assignee sits here rather than in a list of its own because
+// it's a fixed two-value axis, unlike Projects and Tags which grow.
 
 import { Component, inject, output } from '@angular/core';
 
@@ -13,12 +14,13 @@ import { TaskStore } from '../task-store';
   selector: 'app-assignee-filter',
   standalone: true,
   template: `
-    <div class="seg" role="group" aria-label="Filter by assignee">
+    <div class="seg" role="group" aria-label="Filter by assignee, or clear all filters">
       <button
         type="button"
-        [class.on]="store.assigneeFilter() === undefined"
-        [attr.aria-pressed]="store.assigneeFilter() === undefined"
-        [title]="'Everyone — ' + total() + ' tasks'"
+        class="all"
+        [class.on]="!store.hasFilter()"
+        [attr.aria-pressed]="!store.hasFilter()"
+        [title]="'Everything — ' + total() + ' tasks'"
         (click)="pick(undefined)"
       >All</button>
 
@@ -47,7 +49,7 @@ import { TaskStore } from '../task-store';
     </div>
   `,
   styles: `
-    :host { display: block; margin-bottom: 0.75rem; }
+    :host { display: block; flex: 1; min-width: 0; }
     .seg {
       display: flex;
       gap: 1px;
@@ -82,8 +84,12 @@ export class AssigneeFilter {
   protected store = inject(TaskStore);
   protected readonly assignees = ASSIGNEES;
 
-  /** Fires on any pick so the shell can leave Search / close an open ticket. */
-  readonly picked = output<void>();
+  /**
+   * Fires on any pick so the shell can leave Search / close an open ticket.
+   * Carries the value so it can also drop the Shift-click range anchor when
+   * the selection is reset.
+   */
+  readonly picked = output<Assignee | undefined>();
 
   protected label(who: Assignee): string {
     return ASSIGNEE_LABEL[who];
@@ -102,7 +108,10 @@ export class AssigneeFilter {
   }
 
   protected pick(who: Assignee | undefined): void {
-    this.store.setAssigneeFilter(who);
-    this.picked.emit();
+    // "All" is the one reset in the sidebar, so it clears the project and
+    // tag filters too — not just this axis.
+    if (who === undefined) this.store.clearFilters();
+    else this.store.toggleAssigneeFilter(who);
+    this.picked.emit(who);
   }
 }

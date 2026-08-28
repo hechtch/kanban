@@ -110,7 +110,7 @@
   color: var(--ink);
 }
 
-.sidebar-collapsed .sidebar :is(h2, ul, app-assignee-filter) { display: none; }
+.sidebar-collapsed .sidebar :is(h2, ul) { display: none; }
 .sidebar-collapsed .sidebar-head { margin-bottom: 0; justify-content: center; }
 
 .sidebar ul {

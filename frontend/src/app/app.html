@@ -19,8 +19,6 @@
 
 <div class="app-body" [class.sidebar-collapsed]="!sidebarOpen()">
   <aside class="sidebar" aria-label="Projects">
-    <app-assignee-filter (picked)="onAssigneePicked()" />
-
     <div class="sidebar-head">
       <h2>Projects</h2>
       @if (sidebarOpen()) {
@@ -43,16 +41,7 @@
     </div>
     <ul [attr.aria-hidden]="!sidebarOpen()" role="list">
       <li class="all">
-        <button
-          type="button"
-          class="row"
-          [class.selected]="filter().size === 0"
-          [attr.aria-pressed]="filter().size === 0"
-          (click)="selectAll()"
-        >
-          <span class="name">All</span>
-          <span class="count">{{ tasks().length }}</span>
-        </button>
+        <app-assignee-filter (picked)="onAssigneePicked($event)" />
       </li>
       @for (p of projects(); track p.id) {
         <li>

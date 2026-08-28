@@ -5,6 +5,7 @@ import { provideHttpClientTesting, HttpTestingController } from '@angular/common
 
 import { App } from './app';
 import { routes } from './app.routes';
+import { TaskStore } from './task-store';
 
 describe('App', () => {
   let http: HttpTestingController;
@@ -63,7 +64,7 @@ describe('App', () => {
     fixture.componentInstance.selectProject(3);
     await fixture.whenStable();
     expect(router.url).toBe('/list');
-    fixture.componentInstance.selectAll();
+    TestBed.inject(TaskStore).clearFilters();
   });
 
   it('picking a project from Search jumps to the board', async () => {
@@ -77,7 +78,7 @@ describe('App', () => {
     await fixture.whenStable();
     expect(router.url).toBe('/board');
     expect([...fixture.componentInstance.filter()]).toEqual([7]);
-    fixture.componentInstance.selectAll();
+    TestBed.inject(TaskStore).clearFilters();
   });
 
   it('should render the Kanban heading', () => {

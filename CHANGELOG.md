@@ -41,9 +41,10 @@ All notable changes to this project will be documented here. Format follows
   silently, with no undo.
 
 ### Added
-- **Filter by assignee** — a segmented `All · you · Claude` control
-  at the top of the sidebar splits the board between the two owners
-  (counts are in the tooltip). Pick one and the Board and List show
+- **Filter by assignee** — the sidebar's *All* row is now a segmented
+  `All · you · Claude` control that splits the board between the two
+  owners (counts are in the tooltip), with *All* clearing every filter
+  at once. Pick an owner and the Board and List show
   only that owner's work; it combines
   with the project and tag filters and survives a reload. Ownership is
   the same signal the card's actor chip already showed — a task

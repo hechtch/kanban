@@ -1,10 +1,12 @@
 CONTAINER_RUNTIME ?= docker
+TRUFFLEHOG_IMAGE ?= docker.io/trufflesecurity/trufflehog:latest
 IMAGE ?= kanban:latest
 
 .PHONY: install run run-bg build test lint clean \
         run-frontend run-backend build-frontend build-backend \
         test-frontend test-backend lint-frontend lint-backend \
-        container-build container-run container-push
+        container-build container-run container-push \
+        secret-scan secret-scan-history
 
 install:
 	cd frontend && npm install
@@ -42,6 +44,16 @@ test-frontend:
 	cd frontend && npx ng test --watch=false --coverage --coverage-reporters=text-summary
 
 lint: lint-frontend lint-backend
+
+# Scan the working tree for verified secrets.
+secret-scan:
+	$(CONTAINER_RUNTIME) run --rm -v "$$PWD:/repo:ro" $(TRUFFLEHOG_IMAGE) \
+	  filesystem /repo --only-verified --fail
+
+# Scan the full git history. Slower; run after a force-push or audit.
+secret-scan-history:
+	$(CONTAINER_RUNTIME) run --rm -v "$$PWD:/repo:ro" $(TRUFFLEHOG_IMAGE) \
+	  git file:///repo --only-verified --fail
 
 lint-backend:
 	cd backend && golangci-lint run ./...
