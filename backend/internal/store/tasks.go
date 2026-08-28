@@ -97,15 +97,8 @@ func (s *Store) ListTasks(f TaskFilter) ([]Task, error) {
 		return nil, err
 	}
 
-	tagsByTask, err := s.tagsForTasks(ids)
-	if err != nil {
+	if err := s.attachTags(out); err != nil {
 		return nil, err
-	}
-	for i := range out {
-		out[i].Tags = tagsByTask[out[i].ID]
-		if out[i].Tags == nil {
-			out[i].Tags = []string{}
-		}
 	}
 	return out, nil
 }
@@ -123,15 +116,11 @@ func (s *Store) GetTask(id int64) (Task, error) {
 	if err != nil {
 		return Task{}, err
 	}
-	tags, err := s.tagsForTasks([]int64{id})
-	if err != nil {
+	ts := []Task{t}
+	if err := s.attachTags(ts); err != nil {
 		return Task{}, err
 	}
-	t.Tags = tags[id]
-	if t.Tags == nil {
-		t.Tags = []string{}
-	}
-	return t, nil
+	return ts[0], nil
 }
 
 func (s *Store) CreateTask(t Task) (Task, error) {
@@ -334,7 +323,58 @@ func scanTask(r rowScanner) (Task, error) {
 	return t, nil
 }
 
-func (s *Store) tagsForTasks(ids []int64) (map[int64][]string, error) {
+// attachTags fills in Tags for each task in place: the task's own tags
+// (sorted) followed by any tags its project stamps on that the task
+// doesn't already carry. Project tags are merged here, on read, rather
+// than copied onto task rows — so dropping a tag from a project drops it
+// from every task at once, with nothing to backfill.
+func (s *Store) attachTags(tasks []Task) error {
+	for i := range tasks {
+		tasks[i].Tags = []string{}
+	}
+	if len(tasks) == 0 {
+		return nil
+	}
+	ids := make([]int64, 0, len(tasks))
+	projSet := map[int64]bool{}
+	for _, t := range tasks {
+		ids = append(ids, t.ID)
+		if t.ProjectID != nil {
+			projSet[*t.ProjectID] = true
+		}
+	}
+	own, err := s.linkedTags("task_tag", "task_id", ids)
+	if err != nil {
+		return err
+	}
+	projIDs := make([]int64, 0, len(projSet))
+	for id := range projSet {
+		projIDs = append(projIDs, id)
+	}
+	inherited, err := s.linkedTags("project_tag", "project_id", projIDs)
+	if err != nil {
+		return err
+	}
+	for i := range tasks {
+		t := &tasks[i]
+		if tags := own[t.ID]; tags != nil {
+			t.Tags = tags
+		}
+		if t.ProjectID == nil {
+			continue
+		}
+		for _, tag := range inherited[*t.ProjectID] {
+			if !contains(t.Tags, tag) {
+				t.Tags = append(t.Tags, tag)
+			}
+		}
+	}
+	return nil
+}
+
+// linkedTags reads the tags joined to each id through a link table
+// (`task_tag`/`task_id` or `project_tag`/`project_id`), sorted by name.
+func (s *Store) linkedTags(table, keyCol string, ids []int64) (map[int64][]string, error) {
 	out := map[int64][]string{}
 	if len(ids) == 0 {
 		return out, nil
@@ -345,9 +385,9 @@ func (s *Store) tagsForTasks(ids []int64) (map[int64][]string, error) {
 	for i, id := range ids {
 		args[i] = id
 	}
-	q := `SELECT tt.task_id, t.name
-	      FROM task_tag tt JOIN tag t ON t.id = tt.tag_id
-	      WHERE tt.task_id IN (` + placeholders + `)
+	q := `SELECT l.` + keyCol + `, t.name
+	      FROM ` + table + ` l JOIN tag t ON t.id = l.tag_id
+	      WHERE l.` + keyCol + ` IN (` + placeholders + `)
 	      ORDER BY t.name`
 	rows, err := s.db.Query(q, args...)
 	if err != nil {
@@ -355,18 +395,56 @@ func (s *Store) tagsForTasks(ids []int64) (map[int64][]string, error) {
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var taskID int64
+		var id int64
 		var name string
-		if err := rows.Scan(&taskID, &name); err != nil {
+		if err := rows.Scan(&id, &name); err != nil {
 			return nil, err
 		}
-		out[taskID] = append(out[taskID], name)
+		out[id] = append(out[id], name)
 	}
 	return out, rows.Err()
 }
 
+// setTaskTags replaces a task's own tags. Tags the task's project already
+// stamps on are dropped here: they show up on read anyway (attachTags),
+// and keeping them off the task row is what lets a project tag change
+// propagate cleanly. Runs after the task row is written so project_id is
+// current.
 func setTaskTags(tx *sql.Tx, taskID int64, tags []string) error {
-	if _, err := tx.Exec(`DELETE FROM task_tag WHERE task_id = ?`, taskID); err != nil {
+	rows, err := tx.Query(
+		`SELECT t.name FROM project_tag pt
+		   JOIN tag t ON t.id = pt.tag_id
+		   JOIN task k ON k.project_id = pt.project_id
+		  WHERE k.id = ?`, taskID)
+	if err != nil {
+		return err
+	}
+	inherited := map[string]bool{}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			rows.Close()
+			return err
+		}
+		inherited[name] = true
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	own := make([]string, 0, len(tags))
+	for _, raw := range tags {
+		if name := strings.TrimSpace(raw); name != "" && !inherited[name] {
+			own = append(own, name)
+		}
+	}
+	return setLinkedTags(tx, "task_tag", "task_id", taskID, own)
+}
+
+// setLinkedTags replaces the tag set joined to `id` through a link table,
+// creating tag rows as needed. Blank names are skipped.
+func setLinkedTags(tx *sql.Tx, table, keyCol string, id int64, tags []string) error {
+	if _, err := tx.Exec(`DELETE FROM `+table+` WHERE `+keyCol+` = ?`, id); err != nil {
 		return err
 	}
 	for _, raw := range tags {
@@ -382,11 +460,19 @@ func setTaskTags(tx *sql.Tx, taskID int64, tags []string) error {
 			return err
 		}
 		if _, err := tx.Exec(
-			`INSERT OR IGNORE INTO task_tag (task_id, tag_id) VALUES (?, ?)`,
-			taskID, tagID,
+			`INSERT OR IGNORE INTO `+table+` (`+keyCol+`, tag_id) VALUES (?, ?)`, id, tagID,
 		); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func contains(list []string, s string) bool {
+	for _, v := range list {
+		if v == s {
+			return true
+		}
+	}
+	return false
 }

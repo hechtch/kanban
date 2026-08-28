@@ -21,6 +21,15 @@
   <aside class="sidebar" aria-label="Projects">
     <div class="sidebar-head">
       <h2>Projects</h2>
+      @if (sidebarOpen()) {
+        <button
+          type="button"
+          class="sidebar-toggle add"
+          (click)="openProjectEditor(null)"
+          aria-label="New project"
+          title="New project"
+        >+</button>
+      }
       <button
         type="button"
         class="sidebar-toggle"
@@ -57,6 +66,13 @@
             <span class="name">{{ p.name }}</span>
             <span class="count">{{ countFor(p.id) }}</span>
           </button>
+          <button
+            type="button"
+            class="edit"
+            (click)="openProjectEditor(p, $event)"
+            [attr.aria-label]="'Edit ' + p.name"
+            title="Edit project"
+          >✎</button>
         </li>
       } @empty {
         <li class="empty">no projects yet</li>
@@ -74,6 +90,44 @@
           <span class="count">{{ countFor(null) }}</span>
         </button>
       </li>
+      @if (archivedProjects().length) {
+        <li class="archived-head">
+          <button
+            type="button"
+            class="row fold"
+            (click)="toggleArchived()"
+            [attr.aria-expanded]="archivedOpen()"
+          >
+            <span class="name">{{ archivedOpen() ? '▾' : '▸' }} archived</span>
+            <span class="count">{{ archivedProjects().length }}</span>
+          </button>
+        </li>
+        @if (archivedOpen()) {
+          @for (p of archivedProjects(); track p.id) {
+            <li class="archived">
+              <button
+                type="button"
+                class="row"
+                [class.selected]="isSelected(p.id)"
+                [attr.aria-pressed]="isSelected(p.id)"
+                (click)="selectProject(p.id, $event)"
+                title="Archived · click to show its tasks anyway"
+              >
+                <span class="dot" [style.background]="p.color"></span>
+                <span class="name">{{ p.name }}</span>
+                <span class="count">{{ countFor(p.id) }}</span>
+              </button>
+              <button
+                type="button"
+                class="edit"
+                (click)="openProjectEditor(p, $event)"
+                [attr.aria-label]="'Edit ' + p.name"
+                title="Edit project"
+              >✎</button>
+            </li>
+          }
+        }
+      }
     </ul>
 
     <h2 class="section-head">Tags</h2>
@@ -109,6 +163,15 @@
     }
   </main>
 </div>
+
+@if (editingProject() !== undefined) {
+  <app-project-editor
+    [project]="editingProject() ?? null"
+    (save)="saveProject($event)"
+    (remove)="deleteProject()"
+    (cancel)="closeProjectEditor()"
+  />
+}
 
 @if (captureOpen()) {
   <app-capture

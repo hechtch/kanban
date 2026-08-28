@@ -32,7 +32,8 @@ export class List {
   private store = inject(TaskStore);
 
   readonly statuses = [...COLUMN_STATUSES, 'backlog' as Status];
-  readonly projects = this.store.projects;
+  /** Offered in the inline project select — archived projects aren't new homes. */
+  readonly projects = this.store.activeProjects;
 
   statusLabel(s: Status): string {
     return STATUS_LABEL[s];
@@ -54,6 +55,9 @@ export class List {
       // Project filter: only the selected project's section.
       // Tag filter: only projects that actually have a matching task —
       // a tag spans projects, so most sections would otherwise be empty.
+      // Archived: folded away entirely unless explicitly selected, matching
+      // the sidebar — otherwise finished projects pile up as empty sections.
+      if (p.archived && !filter.has(p.id)) continue;
       if (filter.size && !filter.has(p.id)) continue;
       if (tagFilter !== undefined && !byProj.has(p.id)) continue;
       out.push({ project: p, tasks: (byProj.get(p.id) ?? []).slice().sort(sortKey) });

@@ -31,6 +31,31 @@ export class TaskStore {
   readonly tasks = this._tasks.asReadonly();
   readonly projects = this._projects.asReadonly();
 
+  readonly activeProjects = computed(() => this._projects().filter(p => !p.archived));
+  readonly archivedProjects = computed(() => this._projects().filter(p => p.archived));
+  private readonly archivedIds = computed(() => new Set(this.archivedProjects().map(p => p.id)));
+
+  /** Tasks outside archived projects — what "All" shows and counts. */
+  readonly activeTasks = computed(() => {
+    const archived = this.archivedIds();
+    if (!archived.size) return this._tasks();
+    return this._tasks().filter(t => t.project_id === null || !archived.has(t.project_id));
+  });
+
+  /**
+   * `activeTasks`, plus the tasks of any archived project the sidebar
+   * filter names explicitly. Archiving hides a finished project's tasks by
+   * default, but picking it from the archived section still shows them.
+   */
+  private readonly liveTasks = computed(() => {
+    const archived = this.archivedIds();
+    if (!archived.size) return this._tasks();
+    const f = this.projectFilter();
+    return this._tasks().filter(
+      t => t.project_id === null || !archived.has(t.project_id) || f.has(t.project_id),
+    );
+  });
+
   /**
    * The active sidebar project filter. Empty set = all. Stale project ids
    * (deleted since the selection was persisted) are dropped once projects
@@ -74,7 +99,7 @@ export class TaskStore {
    */
   readonly tagCounts = computed<TagCount[]>(() => {
     const counts = new Map<string, number>();
-    for (const t of this._tasks()) {
+    for (const t of this.liveTasks()) {
       for (const tag of t.tags) counts.set(tag, (counts.get(tag) ?? 0) + 1);
     }
     return [...counts.entries()]
@@ -109,7 +134,7 @@ export class TaskStore {
   readonly visibleTasks = computed(() => {
     const f = this.projectFilter();
     const tag = this.tagFilter();
-    let out = this._tasks();
+    let out = this.liveTasks();
     if (f.size) out = out.filter(t => f.has(t.project_id));
     if (tag !== undefined) out = out.filter(t => t.tags.includes(tag));
     return out;
@@ -137,7 +162,55 @@ export class TaskStore {
 
   refresh(): void {
     this.api.listProjects().subscribe(p => this._projects.set(p));
+    this.refreshTasks();
+  }
+
+  private refreshTasks(): void {
     this.api.listTasks().subscribe(t => this._tasks.set(t));
+  }
+
+  // ─── projects ───────────────────────────────────────────────────────
+
+  async createProject(input: Partial<Project>): Promise<Project> {
+    const created = await firstValueFrom(this.api.createProject(input));
+    this._projects.update(ps => [...ps, created]);
+    return created;
+  }
+
+  /**
+   * Optimistic like `patch`. A change to the project's tags changes every
+   * task's effective tags, and the server is where that merge happens, so
+   * the task list is re-read afterwards.
+   */
+  async patchProject(id: number, patch: Partial<Project>): Promise<Project> {
+    const prev = this._projects();
+    this._projects.set(prev.map(p => (p.id === id ? { ...p, ...patch } as Project : p)));
+    try {
+      const updated = await firstValueFrom(this.api.patchProject(id, patch));
+      this._projects.update(ps => ps.map(p => (p.id === id ? updated : p)));
+      if (patch.tags !== undefined) this.refreshTasks();
+      return updated;
+    } catch (e) {
+      this._projects.set(prev);
+      throw e;
+    }
+  }
+
+  /** Tasks in the project survive and land in Inbox (the FK is ON DELETE SET NULL). */
+  async removeProject(id: number): Promise<void> {
+    const prevProjects = this._projects();
+    const prevTasks = this._tasks();
+    this._projects.set(prevProjects.filter(p => p.id !== id));
+    this._tasks.set(prevTasks.map(t => (t.project_id === id ? { ...t, project_id: null } : t)));
+    if (this.projectFilter().has(id)) this.toggleProjectInFilter(id);
+    try {
+      await firstValueFrom(this.api.deleteProject(id));
+      this.refreshTasks();
+    } catch (e) {
+      this._projects.set(prevProjects);
+      this._tasks.set(prevTasks);
+      throw e;
+    }
   }
 
   /** Replace the sidebar project filter. Persists across reloads like the sidebar state. */

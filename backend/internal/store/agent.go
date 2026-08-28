@@ -120,27 +120,18 @@ func (s *Store) ListPlanTasks(filter ...any) ([]Task, error) {
 	defer rows.Close()
 
 	out := []Task{}
-	ids := []int64{}
 	for rows.Next() {
 		t, err := scanTask(rows)
 		if err != nil {
 			return nil, err
 		}
 		out = append(out, t)
-		ids = append(ids, t.ID)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	tagsByTask, err := s.tagsForTasks(ids)
-	if err != nil {
+	if err := s.attachTags(out); err != nil {
 		return nil, err
-	}
-	for i := range out {
-		out[i].Tags = tagsByTask[out[i].ID]
-		if out[i].Tags == nil {
-			out[i].Tags = []string{}
-		}
 	}
 	return out, nil
 }
@@ -160,15 +151,11 @@ func (s *Store) GetTaskByPlanSlug(slug string) (Task, error) {
 	if err != nil {
 		return Task{}, err
 	}
-	tags, err := s.tagsForTasks([]int64{t.ID})
-	if err != nil {
+	ts := []Task{t}
+	if err := s.attachTags(ts); err != nil {
 		return Task{}, err
 	}
-	t.Tags = tags[t.ID]
-	if t.Tags == nil {
-		t.Tags = []string{}
-	}
-	return t, nil
+	return ts[0], nil
 }
 
 // UpsertPlan inserts a new task with the given slug, or patches the existing

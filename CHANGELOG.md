@@ -39,6 +39,21 @@ All notable changes to this project will be documented here. Format follows
   silently, with no undo.
 
 ### Added
+- **Archive a finished project** — a project can be marked archived
+  from the sidebar's new project editor (or by an agent, with
+  `{"archived":true}` on the project upsert). It folds into an
+  "archived" section at the bottom of the sidebar and its tasks drop
+  off the Board and List, without deleting anything: expand the
+  section and click the project and its tasks come back.
+- **Project default tags** — a project can carry tags that every
+  ticket in it inherits, so all *2026 Taxes* tickets read as `#tax`
+  without tagging each one. The server merges them on read, so
+  dropping a tag from the project drops it from every ticket at once;
+  in the ticket they show as locked chips beside the editable tags.
+- **Project editor** — projects were API-only; the sidebar now has a
+  `+` to create one and a pencil on each row to rename it, change its
+  colour, set its default tags, archive it, or delete it (its tasks
+  move to Inbox).
 - **Clickable checkboxes in notes** — Markdown task-list items
   (`- [ ]` / `- [x]`) in the ticket's Notes render as live checkboxes.
   Clicking one (or focusing it and pressing Space) flips the matching

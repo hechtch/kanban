@@ -6,8 +6,8 @@ import { TaskStore } from './task-store';
 import { Project, Task } from './models';
 
 const projects: Project[] = [
-  { id: 1, slug: 'taxes', name: '2026 Taxes', color: '#a00', sort_order: 0 },
-  { id: 2, slug: 'house', name: 'House', color: '#0a0', sort_order: 1 },
+  { id: 1, slug: 'taxes', name: '2026 Taxes', color: '#a00', sort_order: 0, archived: false, tags: [] },
+  { id: 2, slug: 'house', name: 'House', color: '#0a0', sort_order: 1, archived: false, tags: [] },
 ];
 
 function task(
@@ -176,5 +176,60 @@ describe('TaskStore project filter', () => {
     expect(store.withFilterDefaults({ title: 'x', tags: ['finance'] }).tags).toEqual(['finance']);
     store.setTagFilter(undefined);
     expect(store.withFilterDefaults({ title: 'x' }).tags).toBeUndefined();
+  });
+});
+
+describe('TaskStore archived projects', () => {
+  let store: TaskStore;
+  let http: HttpTestingController;
+
+  // 2025 Taxes is finished and archived; its one task carries #tax via the project.
+  const withArchived: Project[] = [
+    ...projects,
+    { id: 3, slug: 'taxes-2025', name: '2025 Taxes', color: '#00a', sort_order: 2, archived: true, tags: ['tax'] },
+  ];
+  const tasksWithArchived: Task[] = [...tasks, task(40, 3, 'done', ['tax'])];
+
+  beforeEach(() => {
+    localStorage.removeItem('kanban-project-filter');
+    localStorage.removeItem('kanban-tag-filter');
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    http = TestBed.inject(HttpTestingController);
+    store = TestBed.inject(TaskStore);
+    http.expectOne(req => req.url.endsWith('/api/projects')).flush(withArchived);
+    http.expectOne(req => req.url.endsWith('/api/tasks')).flush(tasksWithArchived);
+  });
+
+  afterEach(() => {
+    http.verify();
+    localStorage.removeItem('kanban-project-filter');
+  });
+
+  it('splits projects into active and archived', () => {
+    expect(store.activeProjects().map(p => p.id)).toEqual([1, 2]);
+    expect(store.archivedProjects().map(p => p.id)).toEqual([3]);
+  });
+
+  it('keeps archived tasks and their tags off the board by default', () => {
+    expect(store.visibleTasks().map(t => t.id)).toEqual([10, 11, 20, 30]);
+    expect(store.activeTasks().map(t => t.id)).toEqual([10, 11, 20, 30]);
+    expect(store.tagCounts().map(t => t.name)).not.toContain('tax');
+  });
+
+  it('shows an archived project when it is picked explicitly', () => {
+    store.setProjectFilter([3]);
+    expect(store.visibleTasks().map(t => t.id)).toEqual([40]);
+    expect(store.tagCounts().map(t => t.name)).toContain('tax');
+  });
+
+  it('re-reads tasks after a project tag change, since the server merges them', async () => {
+    const pending = store.patchProject(1, { tags: ['finance'] });
+    http.expectOne(req => req.method === 'PATCH' && req.url.endsWith('/api/projects/1'))
+      .flush({ ...projects[0], tags: ['finance'] });
+    await pending;
+    http.expectOne(req => req.url.endsWith('/api/tasks')).flush(tasksWithArchived);
+    expect(store.projects().find(p => p.id === 1)?.tags).toEqual(['finance']);
   });
 });

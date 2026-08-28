@@ -64,6 +64,23 @@ export class TaskView implements AfterViewInit, OnDestroy {
     return this.store.projects().find(p => p.id === t.project_id) ?? null;
   });
 
+  /** Projects offered in the select: the active ones, plus this task's own if it's archived. */
+  readonly projectOptions = computed<Project[]>(() => {
+    const active = this.store.activeProjects();
+    const cur = this.project();
+    return cur && cur.archived ? [...active, cur] : active;
+  });
+
+  /** Tags stamped on by the project — shown as locked chips, not in the input. */
+  readonly inheritedTags = computed<string[]>(() => this.project()?.tags ?? []);
+
+  /** The task's own tags: everything the project didn't supply. */
+  readonly ownTags = computed<string[]>(() => {
+    const t = this.task();
+    const inherited = this.inheritedTags();
+    return t ? t.tags.filter(tag => !inherited.includes(tag)) : [];
+  });
+
   // ─── edit state ─────────────────────────────────────────────────────
   readonly editingBody = signal(false);
   readonly editingTitle = signal(false);
@@ -98,8 +115,7 @@ export class TaskView implements AfterViewInit, OnDestroy {
     // Keep tagsDraft synced with task when not actively editing (no tags edit
     // mode — they commit on blur/enter).
     effect(() => {
-      const t = this.task();
-      if (t) this.tagsDraft.set(t.tags.join(', '));
+      if (this.task()) this.tagsDraft.set(this.ownTags().join(', '));
     });
   }
 
@@ -220,7 +236,8 @@ export class TaskView implements AfterViewInit, OnDestroy {
       .split(',')
       .map(s => s.trim())
       .filter(Boolean);
-    if (tags.length === t.tags.length && tags.every((tag, i) => tag === t.tags[i])) {
+    const own = this.ownTags();
+    if (tags.length === own.length && tags.every((tag, i) => tag === own[i])) {
       return;
     }
     await this.store.patch(t.id, { tags });

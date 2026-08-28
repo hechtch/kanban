@@ -290,9 +290,11 @@ type listProjectRecordsOutput struct {
 type upsertProjectInput struct {
 	Slug string `path:"slug"`
 	Body struct {
-		Name      *string  `json:"name,omitempty"`
-		Color     *string  `json:"color,omitempty"`
-		SortOrder *float64 `json:"sort_order,omitempty"`
+		Name      *string   `json:"name,omitempty"`
+		Color     *string   `json:"color,omitempty"`
+		SortOrder *float64  `json:"sort_order,omitempty"`
+		Archived  *bool     `json:"archived,omitempty" doc:"Finished project: hidden from the sidebar, tasks off the board"`
+		Tags      *[]string `json:"tags,omitempty" doc:"Replaces the project's tag set; every task in the project carries these"`
 	}
 }
 
@@ -363,9 +365,10 @@ func registerAgentProjects(api huma.API, st *store.Store) {
 		}
 		p, created, err := st.UpsertProjectBySlug(in.Slug, store.ProjectUpsert{
 			Name: in.Body.Name, Color: in.Body.Color, SortOrder: in.Body.SortOrder,
+			Archived: in.Body.Archived, Tags: in.Body.Tags,
 		})
 		if err != nil {
-			return nil, huma.Error422UnprocessableEntity(err.Error())
+			return nil, storeErr(err)
 		}
 		// Huma doesn't have an easy way to flip the response code from a
 		// single handler; we set the operation's DefaultStatus to 200 above

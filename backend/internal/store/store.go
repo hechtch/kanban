@@ -67,6 +67,12 @@ func (s *Store) migrate() error {
 			tag_id   INTEGER NOT NULL REFERENCES tag(id)  ON DELETE CASCADE,
 			PRIMARY KEY (task_id, tag_id)
 		)`,
+		// Tags a project stamps onto every task in it. Same shape as task_tag.
+		`CREATE TABLE IF NOT EXISTS project_tag (
+			project_id  INTEGER NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+			tag_id      INTEGER NOT NULL REFERENCES tag(id)     ON DELETE CASCADE,
+			PRIMARY KEY (project_id, tag_id)
+		)`,
 		`CREATE INDEX IF NOT EXISTS idx_task_status ON task(status, sort_order)`,
 		`CREATE INDEX IF NOT EXISTS idx_task_project ON task(project_id, sort_order)`,
 		`CREATE TABLE IF NOT EXISTS activity (
@@ -101,6 +107,9 @@ func (s *Store) migrate() error {
 		return err
 	}
 	if err := s.addColumnIfMissing("project", "slug", "TEXT"); err != nil {
+		return err
+	}
+	if err := s.addColumnIfMissing("project", "archived", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return err
 	}
 	if err := s.migrateTaskStatusConstraint(); err != nil {

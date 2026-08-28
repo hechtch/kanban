@@ -171,11 +171,13 @@ priority from `1–4`, and inline edits all hit it.
       selects, `/api/tasks` + agent upsert, `kanban-plans` skill updated)
 - [x] Markdown checkboxes in the ticket view are clickable — toggling
       one rewrites the matching `[ ]`/`[x]` in the body and saves
-- [ ] Hide (archive) a project once its work is done so it drops out
+- [x] Hide (archive) a project once its work is done so it drops out
       of the sidebar and filters without deleting its tickets
-- [ ] Project-level default tags: tags attached to a project are
+- [x] Project-level default tags: tags attached to a project are
       applied to every ticket in it (e.g. all *2026 Taxes* tickets
       carry `#tax`)
+- [x] Project editor in the sidebar (name, colour, default tags,
+      archive, delete) — projects used to be API-only
 
 ## Open questions
 

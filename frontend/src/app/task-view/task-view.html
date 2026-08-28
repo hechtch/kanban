@@ -79,7 +79,7 @@
             (ngModelChange)="setProject($event)"
           >
             <option value="">— inbox —</option>
-            @for (p of store.projects(); track p.id) {
+            @for (p of projectOptions(); track p.id) {
               <option [ngValue]="p.id">{{ p.name }}</option>
             }
           </select>
@@ -115,7 +115,12 @@
 
       <div class="field tags">
         <dt>Tags</dt>
-        <dd>
+        <dd class="tags-row">
+          @for (tag of inheritedTags(); track tag) {
+            <span class="inherited" [title]="'From project ' + (project()?.name ?? '')">
+              <span class="hash">#</span>{{ tag }}
+            </span>
+          }
           <input
             type="text"
             [ngModel]="tagsDraft()"

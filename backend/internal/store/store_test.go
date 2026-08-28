@@ -13,7 +13,7 @@ func TestOpenAndMigrate(t *testing.T) {
 	}
 	defer s.Close()
 
-	tables := []string{"project", "task", "tag", "task_tag"}
+	tables := []string{"project", "task", "tag", "task_tag", "project_tag"}
 	for _, tbl := range tables {
 		var name string
 		err := s.db.QueryRow(

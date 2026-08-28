@@ -3,17 +3,18 @@ import { ActivatedRoute, Router, RouterLink, RouterLinkActive, RouterOutlet } fr
 import { toSignal } from '@angular/core/rxjs-interop';
 import { map } from 'rxjs';
 
-import { Task } from './models';
+import { Project, Task } from './models';
 import { TaskStore } from './task-store';
 import { Capture } from './task-modal/capture';
 import { DashboardNav } from './shared/dashboard-nav';
 import { TICKET_PARAM, TicketNav } from './shared/ticket-nav';
 import { TaskView } from './task-view/task-view';
+import { ProjectDraft, ProjectEditor } from './project-editor/project-editor';
 import pkg from '../../package.json';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, Capture, DashboardNav, TaskView],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, Capture, DashboardNav, TaskView, ProjectEditor],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
@@ -44,9 +45,14 @@ export class App {
   private readonly baseHref = document.querySelector('base')?.getAttribute('href') ?? '/';
   readonly inDashboard = this.baseHref.startsWith('/apps/');
 
-  readonly projects = this.store.projects;
-  readonly tasks = this.store.tasks;
+  readonly projects = this.store.activeProjects;
+  readonly archivedProjects = this.store.archivedProjects;
+  readonly tasks = this.store.activeTasks;
   readonly filter = this.store.projectFilter;
+  /** The archived section of the sidebar is folded by default — it's the attic. */
+  readonly archivedOpen = signal(false);
+  /** Project editor state: `undefined` closed, `null` new project, else editing. */
+  readonly editingProject = signal<Project | null | undefined>(undefined);
   /** Last project row clicked without Shift — the start of a Shift-click range. */
   private rangeAnchor: number | null | undefined = undefined;
   readonly tagFilter = this.store.tagFilter;
@@ -122,9 +128,44 @@ export class App {
     this.returnToBoard();
   }
 
-  /** Rows as they appear in the sidebar: projects, then Inbox. */
+  /** Rows as they appear in the sidebar: projects, Inbox, then any unfolded archived ones. */
   private sidebarOrder(): (number | null)[] {
-    return [...this.projects().map(p => p.id), null];
+    const archived = this.archivedOpen() ? this.archivedProjects().map(p => p.id) : [];
+    return [...this.projects().map(p => p.id), null, ...archived];
+  }
+
+  toggleArchived(): void {
+    this.archivedOpen.update(v => !v);
+  }
+
+  // ─── project editor ─────────────────────────────────────────────────
+  openProjectEditor(p: Project | null, event?: Event): void {
+    event?.stopPropagation();
+    this.editingProject.set(p);
+  }
+
+  closeProjectEditor(): void {
+    this.editingProject.set(undefined);
+  }
+
+  async saveProject(draft: ProjectDraft): Promise<void> {
+    const p = this.editingProject();
+    this.editingProject.set(undefined);
+    if (p) {
+      await this.store.patchProject(p.id, draft);
+    } else {
+      await this.store.createProject(draft);
+    }
+  }
+
+  async deleteProject(): Promise<void> {
+    const p = this.editingProject();
+    if (!p) return;
+    const n = this.countFor(p.id);
+    const tail = n ? ` Its ${n} task${n === 1 ? '' : 's'} will move to Inbox.` : '';
+    if (!confirm(`Delete project "${p.name}"?${tail}`)) return;
+    this.editingProject.set(undefined);
+    await this.store.removeProject(p.id);
   }
 
   /** Tag rows work the same way: click to select, click again to clear. */

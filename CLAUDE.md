@@ -50,6 +50,17 @@ same bundle works in both modes. **Never hardcode `/api` or
   this in the handler.
 - **Tags are replaced, not diffed.** `POST` / `PATCH` with a `tags`
   array replaces the whole set inside a transaction.
+- **Project tags are merged on read, never copied.** A project's
+  `tags` are stamped onto every task in it by `store.attachTags`
+  at read time; `setTaskTags` strips inherited tags from a task's
+  own set before writing. That's what makes dropping a tag from a
+  project drop it from every task at once, with nothing to
+  backfill — don't "fix" this by writing them onto task rows.
+- **Archiving is a view concern, not a filter on the API.**
+  `project.archived` hides a project's tasks in the frontend
+  (`TaskStore.liveTasks`); every endpoint still returns them.
+  Selecting an archived project in the sidebar brings its tasks
+  back.
 - **All routes under `/api/*`.** The proxy depends on this.
 - **Data lives outside the tree**: `~/.kanban/data/` (override with
   `KANBAN_DB_PATH`). Never commit `*.db*` files.
@@ -193,7 +204,8 @@ GET    /api/agent/plans/<slug>/activity      timeline (oldest first)
 
 GET    /api/agent/projects                   list w/ plan_count
 GET    /api/agent/projects/<slug>            single
-PUT    /api/agent/projects/<slug>            upsert (name, color, sort_order)
+PUT    /api/agent/projects/<slug>            upsert (name, color, sort_order,
+                                             archived, tags)
 GET    /api/agent/projects/<slug>/plans      same as /plans?project=<slug>
 ```
 
@@ -214,10 +226,17 @@ GET    /api/agent/projects/<slug>/plans      same as /plans?project=<slug>
   `null` as clear and absent as leave-alone, like `git_branch`.
   Rendered as a `fable / xhigh` chip on the card and two selects in
   the ticket modal.
+- **Projects** carry `archived` (finished — folded away in the
+  sidebar, tasks off the board, nothing deleted) and `tags` (every
+  task in the project inherits them). Both on the upsert; `tags`
+  replaces the whole set.
 - `body` is markdown, rendered in the ticket modal in the UI
   (`/board?task=<task_id>`; the older `/task/<task_id>` form still
   works — it redirects). The rendered view has its own edit toggle,
-  so a human can fix typos without going through the API.
+  so a human can fix typos without going through the API. Markdown
+  task-list items (`- [ ]` / `- [x]`) render as live checkboxes a
+  human can tick off, which rewrites the body — so a plan's
+  checklist can move without an API call.
 - An agent task is identified by `task.plan_slug != null`. Human
   tasks created via the regular `/api/tasks` POST do not appear in
   `/api/agent/plans` — that filter is intentional.

@@ -27,6 +27,12 @@ export interface Project {
   name: string;
   color: string;
   sort_order: number;
+  /** Finished: folded away in the sidebar, tasks off the board unless the
+   *  project is explicitly selected. Nothing is deleted. */
+  archived: boolean;
+  /** Tags every task in the project carries. The server merges them into
+   *  each task's `tags` on read; they aren't stored on the task itself. */
+  tags: string[];
 }
 
 export interface Task {

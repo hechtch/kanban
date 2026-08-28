@@ -18,9 +18,9 @@
 }
 
 .app-header h1 .app-version {
-  font-family: var(--font-ui, inherit);
+  font-family: var(--font-body);
   font-size: 0.65rem;
-  color: var(--muted, #8a8a84);
+  color: var(--muted);
   letter-spacing: 0.4px;
   vertical-align: 2px;
 }
@@ -198,6 +198,26 @@
   margin-bottom: 0.5rem;
 }
 
+/* Pencil on hover/focus; a sibling of the row button, never inside it. */
+.sidebar .edit {
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  padding: 0 0.3rem;
+  cursor: pointer;
+  opacity: 0;
+}
+.sidebar li:hover .edit,
+.sidebar li:focus-within .edit { opacity: 1; }
+.sidebar .edit:hover { color: var(--accent); }
+/* "+ new project" borrows the toggle's pill look. */
+.sidebar-toggle.add { margin-left: auto; padding: 2px 7px; }
+.sidebar .archived-head { margin-top: 0.5rem; }
+.sidebar .row.fold { color: var(--muted); }
+.sidebar .row.fold .name { font-family: var(--font-hand); }
+.sidebar .archived .row:not(.selected) { opacity: 0.65; }
 .sidebar .row.tag .hash { color: var(--muted); }
 .sidebar .row.tag.selected .hash { color: var(--accent); }
 .sidebar .inbox { margin-top: 0.5rem; border-top: 1px dashed var(--hairline); padding-top: 0.5rem; }
