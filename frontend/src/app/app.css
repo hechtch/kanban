@@ -110,7 +110,7 @@
   color: var(--ink);
 }
 
-.sidebar-collapsed .sidebar :is(h2, ul) { display: none; }
+.sidebar-collapsed .sidebar :is(h2, ul, app-assignee-filter) { display: none; }
 .sidebar-collapsed .sidebar-head { margin-bottom: 0; justify-content: center; }
 
 .sidebar ul {
@@ -195,8 +195,6 @@
 .sidebar .row.fold { color: var(--muted); }
 .sidebar .row.fold .name { font-family: var(--font-hand); }
 .sidebar .archived .row:not(.selected) { opacity: 0.65; }
-.sidebar .actor-icon { flex: none; }
-.sidebar .row.claude .actor-icon { color: var(--accent); }
 .sidebar .row.tag .hash { color: var(--muted); }
 .sidebar .row.tag.selected .hash { color: var(--accent); }
 .sidebar .inbox { margin-top: 0.5rem; border-top: 1px dashed var(--hairline); padding-top: 0.5rem; }

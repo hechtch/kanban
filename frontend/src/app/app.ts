@@ -3,18 +3,22 @@ import { ActivatedRoute, Router, RouterLink, RouterLinkActive, RouterOutlet } fr
 import { toSignal } from '@angular/core/rxjs-interop';
 import { map } from 'rxjs';
 
-import { Assignee, ASSIGNEE_LABEL, ASSIGNEES, Project, Task } from './models';
+import { Project, Task } from './models';
 import { TaskStore } from './task-store';
 import { Capture } from './task-modal/capture';
 import { DashboardNav } from './shared/dashboard-nav';
 import { TICKET_PARAM, TicketNav } from './shared/ticket-nav';
 import { TaskView } from './task-view/task-view';
 import { ProjectDraft, ProjectEditor } from './project-editor/project-editor';
+import { AssigneeFilter } from './shared/assignee-filter';
 import pkg from '../../package.json';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, Capture, DashboardNav, TaskView, ProjectEditor],
+  imports: [
+    RouterOutlet, RouterLink, RouterLinkActive, Capture, DashboardNav, TaskView,
+    ProjectEditor, AssigneeFilter,
+  ],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
@@ -57,13 +61,7 @@ export class App {
   private rangeAnchor: number | null | undefined = undefined;
   readonly tagFilter = this.store.tagFilter;
   readonly tags = this.store.tagCounts;
-  readonly assignees = ASSIGNEES;
-  readonly assigneeFilter = this.store.assigneeFilter;
-  readonly assigneeCounts = this.store.assigneeCounts;
 
-  assigneeLabel(who: Assignee): string {
-    return ASSIGNEE_LABEL[who];
-  }
   readonly captureOpen = signal(false);
   readonly navMenuOpen = signal(false);
   readonly sidebarOpen = signal(this.loadSidebarOpen());
@@ -181,9 +179,8 @@ export class App {
     this.returnToBoard();
   }
 
-  /** Assignee is derived from plan ownership, so these two rows are fixed. */
-  selectAssignee(who: Assignee): void {
-    this.store.toggleAssigneeFilter(who);
+  /** The segmented control has already set the filter; just follow it. */
+  onAssigneePicked(): void {
     this.returnToBoard();
   }
 
