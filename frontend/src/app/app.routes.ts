@@ -1,4 +1,7 @@
-import { Routes } from '@angular/router';
+import { inject } from '@angular/core';
+import { Router, Routes } from '@angular/router';
+
+import { TICKET_PARAM } from './shared/ticket-nav';
 
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'board' },
@@ -11,7 +14,14 @@ export const routes: Routes = [
     loadComponent: () => import('./list/list').then(m => m.List),
   },
   {
+    path: 'search',
+    loadComponent: () => import('./search/search').then(m => m.Search),
+  },
+  {
+    // Legacy deep link (agents write `/task/<id>` into notes). The ticket is
+    // now a modal over the board, addressed by `?task=<id>`.
     path: 'task/:id',
-    loadComponent: () => import('./task-view/task-view').then(m => m.TaskView),
+    redirectTo: ({ params }) =>
+      inject(Router).createUrlTree(['/board'], { queryParams: { [TICKET_PARAM]: params['id'] } }),
   },
 ];

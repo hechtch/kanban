@@ -1,4 +1,5 @@
 import {
+  AfterViewInit,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -6,32 +7,39 @@ import {
   ElementRef,
   HostListener,
   inject,
+  input,
+  OnDestroy,
   signal,
   ViewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { toSignal } from '@angular/core/rxjs-interop';
-import { map } from 'rxjs';
 
-import { COLUMN_STATUSES, Project, Status, STATUS_LABEL, Task } from '../models';
+import { COLUMN_STATUSES, EFFORT_OPTIONS, MODEL_OPTIONS, Project, Status, STATUS_LABEL, Task } from '../models';
 import { TaskStore } from '../task-store';
-import { renderMarkdown } from './markdown';
+import { TicketNav } from '../shared/ticket-nav';
+import { confirmDelete } from '../shared/confirm-delete';
+import { renderMarkdown, toggleCheckbox } from './markdown';
 
+/**
+ * The ticket, as a big modal over whatever view is underneath. Hosted by
+ * `App` whenever `?task=<id>` is in the URL; closing means clearing that
+ * param (see `TicketNav`), so the board/list behind it is untouched.
+ */
 @Component({
   selector: 'app-task-view',
   standalone: true,
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule],
   templateUrl: './task-view.html',
   styleUrl: './task-view.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class TaskView {
+export class TaskView implements AfterViewInit, OnDestroy {
   protected store = inject(TaskStore);
-  private route = inject(ActivatedRoute);
-  private router = inject(Router);
+  protected nav = inject(TicketNav);
   private sanitizer = inject(DomSanitizer);
+
+  readonly taskId = input.required<number>();
 
   readonly statuses: Status[] = [...COLUMN_STATUSES, 'backlog'];
 
@@ -39,22 +47,38 @@ export class TaskView {
     return STATUS_LABEL[s];
   }
   readonly priorities = [0, 1, 2, 3] as const;
-
-  private readonly idSig = toSignal(
-    this.route.paramMap.pipe(map(p => Number(p.get('id')))),
-    { initialValue: NaN },
-  );
+  readonly models: readonly string[] = MODEL_OPTIONS;
+  readonly efforts: readonly string[] = EFFORT_OPTIONS;
 
   readonly task = computed<Task | null>(() => {
-    const id = this.idSig();
-    if (!Number.isFinite(id)) return null;
+    const id = this.taskId();
     return this.store.tasks().find(t => t.id === id) ?? null;
   });
+
+  /** True until the first task load lands — avoids a "not found" flash on deep links. */
+  readonly loading = computed(() => this.store.tasks().length === 0);
 
   readonly project = computed<Project | null>(() => {
     const t = this.task();
     if (!t || t.project_id == null) return null;
     return this.store.projects().find(p => p.id === t.project_id) ?? null;
+  });
+
+  /** Projects offered in the select: the active ones, plus this task's own if it's archived. */
+  readonly projectOptions = computed<Project[]>(() => {
+    const active = this.store.activeProjects();
+    const cur = this.project();
+    return cur && cur.archived ? [...active, cur] : active;
+  });
+
+  /** Tags stamped on by the project — shown as locked chips, not in the input. */
+  readonly inheritedTags = computed<string[]>(() => this.project()?.tags ?? []);
+
+  /** The task's own tags: everything the project didn't supply. */
+  readonly ownTags = computed<string[]>(() => {
+    const t = this.task();
+    const inherited = this.inheritedTags();
+    return t ? t.tags.filter(tag => !inherited.includes(tag)) : [];
   });
 
   // ─── edit state ─────────────────────────────────────────────────────
@@ -72,13 +96,26 @@ export class TaskView {
 
   @ViewChild('bodyEditor') bodyEditor?: ElementRef<HTMLTextAreaElement>;
   @ViewChild('titleEditor') titleEditor?: ElementRef<HTMLInputElement>;
+  @ViewChild('box') box?: ElementRef<HTMLElement>;
+
+  private previouslyFocused: HTMLElement | null = null;
+
+  ngAfterViewInit(): void {
+    // Take focus so Esc / `e` land here, and hand it back to the card (or
+    // whatever opened us) on close.
+    this.previouslyFocused = document.activeElement as HTMLElement | null;
+    setTimeout(() => this.box?.nativeElement.focus(), 0);
+  }
+
+  ngOnDestroy(): void {
+    this.previouslyFocused?.focus?.();
+  }
 
   constructor() {
     // Keep tagsDraft synced with task when not actively editing (no tags edit
     // mode — they commit on blur/enter).
     effect(() => {
-      const t = this.task();
-      if (t) this.tagsDraft.set(t.tags.join(', '));
+      if (this.task()) this.tagsDraft.set(this.ownTags().join(', '));
     });
   }
 
@@ -126,6 +163,23 @@ export class TaskView {
 
   cancelBody(): void { this.editingBody.set(false); }
 
+  /**
+   * Clicks inside the rendered body: a task-list checkbox flips the matching
+   * `[ ]` / `[x]` in the source and saves. Default is prevented so the DOM
+   * stays a pure function of the task — the re-render carries the new state
+   * (and a failed PATCH rolls it back visibly).
+   */
+  async onBodyClick(event: MouseEvent): Promise<void> {
+    const el = event.target as HTMLElement | null;
+    if (!(el instanceof HTMLInputElement) || !el.classList.contains('md-check')) return;
+    event.preventDefault();
+    const t = this.task();
+    if (!t) return;
+    const body = toggleCheckbox(t.body ?? '', Number(el.dataset['check']));
+    if (body === null) return;
+    await this.store.patch(t.id, { body });
+  }
+
   onBodyKeydown(event: KeyboardEvent): void {
     if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
       event.preventDefault();
@@ -163,6 +217,18 @@ export class TaskView {
     await this.store.patch(t.id, { project_id });
   }
 
+  async setModel(value: string): Promise<void> {
+    const t = this.task();
+    if (!t || (value || null) === (t.model ?? null)) return;
+    await this.store.patch(t.id, { model: value || null });
+  }
+
+  async setEffort(value: string): Promise<void> {
+    const t = this.task();
+    if (!t || (value || null) === (t.effort ?? null)) return;
+    await this.store.patch(t.id, { effort: value || null });
+  }
+
   async commitTags(): Promise<void> {
     const t = this.task();
     if (!t) return;
@@ -170,7 +236,8 @@ export class TaskView {
       .split(',')
       .map(s => s.trim())
       .filter(Boolean);
-    if (tags.length === t.tags.length && tags.every((tag, i) => tag === t.tags[i])) {
+    const own = this.ownTags();
+    if (tags.length === own.length && tags.every((tag, i) => tag === own[i])) {
       return;
     }
     await this.store.patch(t.id, { tags });
@@ -180,9 +247,9 @@ export class TaskView {
   async remove(): Promise<void> {
     const t = this.task();
     if (!t) return;
-    if (!confirm(`Delete "${t.title}"?`)) return;
+    if (!confirmDelete(t)) return;
     await this.store.remove(t.id);
-    this.router.navigate(['/board']);
+    this.nav.close();
   }
 
   prioLabel(p: number): string {
@@ -198,7 +265,7 @@ export class TaskView {
       event.preventDefault();
       this.startBodyEdit();
     } else if (event.key === 'Escape') {
-      this.router.navigate(['/board']);
+      this.nav.close();
     }
   }
 }

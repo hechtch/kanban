@@ -23,7 +23,7 @@ type taskOutput struct {
 type listTasksInput struct {
 	Status    string `query:"status" doc:"Filter by status (todo/doing/blocked/awaiting_merge/done/backlog)" required:"false"`
 	ProjectID string `query:"project_id" doc:"Filter by project id; pass 'null' for inbox-only tasks" required:"false"`
-	Q         string `query:"q" doc:"Title substring search" required:"false"`
+	Q         string `query:"q" doc:"Full-text search across task title and body (FTS5; multi-word = AND)" required:"false"`
 }
 
 type listTasksOutput struct {
@@ -43,6 +43,8 @@ type createTaskInput struct {
 		SortOrder float64  `json:"sort_order,omitempty"`
 		Tags      []string `json:"tags,omitempty"`
 		GitBranch *string  `json:"git_branch,omitempty"`
+		Model     *string  `json:"model,omitempty" doc:"Suggested Claude model for an agent picking this up, e.g. fable / opus / sonnet / haiku"`
+		Effort    *string  `json:"effort,omitempty" doc:"Suggested reasoning effort: low / medium / high / xhigh / max"`
 	}
 }
 
@@ -51,15 +53,17 @@ type createTaskInput struct {
 type patchTaskInput struct {
 	ID   int64 `path:"id"`
 	Body struct {
-		Title     *string         `json:"title,omitempty"`
-		Body      *string         `json:"body,omitempty"`
-		Status    *string         `json:"status,omitempty" doc:"todo / doing / blocked / awaiting_merge / done / backlog"`
-		Priority  *int            `json:"priority,omitempty" doc:"0–3"`
-		DueText   *string         `json:"due_text,omitempty"`
-		ProjectID Optional[int64] `json:"project_id,omitempty" doc:"Project id, or null to clear, or omit to leave alone"`
-		SortOrder *float64        `json:"sort_order,omitempty"`
-		Tags      *[]string       `json:"tags,omitempty"`
+		Title     *string          `json:"title,omitempty"`
+		Body      *string          `json:"body,omitempty"`
+		Status    *string          `json:"status,omitempty" doc:"todo / doing / blocked / awaiting_merge / done / backlog"`
+		Priority  *int             `json:"priority,omitempty" doc:"0–3"`
+		DueText   *string          `json:"due_text,omitempty"`
+		ProjectID Optional[int64]  `json:"project_id,omitempty" doc:"Project id, or null to clear, or omit to leave alone"`
+		SortOrder *float64         `json:"sort_order,omitempty"`
+		Tags      *[]string        `json:"tags,omitempty"`
 		GitBranch Optional[string] `json:"git_branch,omitempty" doc:"Branch carrying the work, or null to clear"`
+		Model     Optional[string] `json:"model,omitempty" doc:"Suggested Claude model (fable / opus / sonnet / haiku), or null to clear"`
+		Effort    Optional[string] `json:"effort,omitempty" doc:"Suggested reasoning effort (low / medium / high / xhigh / max), or null to clear"`
 	}
 }
 
@@ -111,6 +115,8 @@ func registerTasks(api huma.API, st *store.Store) {
 			SortOrder: in.Body.SortOrder,
 			Tags:      in.Body.Tags,
 			GitBranch: in.Body.GitBranch,
+			Model:     in.Body.Model,
+			Effort:    in.Body.Effort,
 		}
 		out, err := st.CreateTask(t)
 		if err != nil {
@@ -124,17 +130,17 @@ func registerTasks(api huma.API, st *store.Store) {
 		Method:      http.MethodPatch,
 		Path:        "/api/tasks/{id}",
 		Summary:     "Update a task (partial)",
-		Description: "Distinguishes absent fields (left alone) from explicit null on `project_id` / `git_branch` (cleared).",
+		Description: "Distinguishes absent fields (left alone) from explicit null on `project_id` / `git_branch` / `model` / `effort` (cleared).",
 		Tags:        []string{"Tasks"},
 	}, func(_ context.Context, in *patchTaskInput) (*taskOutput, error) {
 		patch := store.TaskPatch{
-			Title:    in.Body.Title,
-			Body:     in.Body.Body,
-			Status:   in.Body.Status,
-			Priority: in.Body.Priority,
-			DueText:  in.Body.DueText,
+			Title:     in.Body.Title,
+			Body:      in.Body.Body,
+			Status:    in.Body.Status,
+			Priority:  in.Body.Priority,
+			DueText:   in.Body.DueText,
 			SortOrder: in.Body.SortOrder,
-			Tags:     in.Body.Tags,
+			Tags:      in.Body.Tags,
 		}
 		if in.Body.ProjectID.Present {
 			if in.Body.ProjectID.Null {
@@ -150,6 +156,22 @@ func registerTasks(api huma.API, st *store.Store) {
 			} else {
 				v := in.Body.GitBranch.Value
 				patch.GitBranch = &v
+			}
+		}
+		if in.Body.Model.Present {
+			if in.Body.Model.Null {
+				patch.ClearModel = true
+			} else {
+				v := in.Body.Model.Value
+				patch.Model = &v
+			}
+		}
+		if in.Body.Effort.Present {
+			if in.Body.Effort.Null {
+				patch.ClearEffort = true
+			} else {
+				v := in.Body.Effort.Value
+				patch.Effort = &v
 			}
 		}
 		out, err := st.UpdateTask(in.ID, patch)

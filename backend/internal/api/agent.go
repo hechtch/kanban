@@ -26,6 +26,7 @@ type slugInput struct {
 
 type listPlansInput struct {
 	Project string `query:"project" doc:"Filter by project slug" required:"false"`
+	Q       string `query:"q" doc:"Full-text search across plan title and body (FTS5; multi-word = AND)" required:"false"`
 }
 
 type planSummary struct {
@@ -55,6 +56,8 @@ type upsertPlanInput struct {
 		ProjectSlug Optional[string] `json:"project_slug,omitempty" doc:"Project slug; null clears the project. Unknown slug → 422."`
 		Tags        *[]string        `json:"tags,omitempty"`
 		GitBranch   Optional[string] `json:"git_branch,omitempty"`
+		Model       Optional[string] `json:"model,omitempty" doc:"Suggested Claude model for whoever picks this up (fable / opus / sonnet / haiku); null clears"`
+		Effort      Optional[string] `json:"effort,omitempty" doc:"Suggested reasoning effort (low / medium / high / xhigh / max); null clears"`
 	}
 }
 
@@ -96,7 +99,9 @@ func registerAgentPlans(api huma.API, st *store.Store) {
 				return nil, huma.Error400BadRequest(err.Error())
 			}
 		}
-		ts, err := st.ListPlanTasks(in.Project)
+		ts, err := st.ListPlanTasks(store.PlanFilter{
+			ProjectSlug: in.Project, Query: in.Q,
+		})
 		if err != nil {
 			return nil, storeErr(err)
 		}
@@ -174,6 +179,22 @@ func registerAgentPlans(api huma.API, st *store.Store) {
 			} else {
 				v := in.Body.GitBranch.Value
 				patch.GitBranch = &v
+			}
+		}
+		if in.Body.Model.Present {
+			if in.Body.Model.Null {
+				patch.ClearModel = true
+			} else {
+				v := in.Body.Model.Value
+				patch.Model = &v
+			}
+		}
+		if in.Body.Effort.Present {
+			if in.Body.Effort.Null {
+				patch.ClearEffort = true
+			} else {
+				v := in.Body.Effort.Value
+				patch.Effort = &v
 			}
 		}
 		t, _, err := st.UpsertPlan(in.Slug, patch)
@@ -269,9 +290,11 @@ type listProjectRecordsOutput struct {
 type upsertProjectInput struct {
 	Slug string `path:"slug"`
 	Body struct {
-		Name      *string  `json:"name,omitempty"`
-		Color     *string  `json:"color,omitempty"`
-		SortOrder *float64 `json:"sort_order,omitempty"`
+		Name      *string   `json:"name,omitempty"`
+		Color     *string   `json:"color,omitempty"`
+		SortOrder *float64  `json:"sort_order,omitempty"`
+		Archived  *bool     `json:"archived,omitempty" doc:"Finished project: hidden from the sidebar, tasks off the board"`
+		Tags      *[]string `json:"tags,omitempty" doc:"Replaces the project's tag set; every task in the project carries these"`
 	}
 }
 
@@ -342,9 +365,10 @@ func registerAgentProjects(api huma.API, st *store.Store) {
 		}
 		p, created, err := st.UpsertProjectBySlug(in.Slug, store.ProjectUpsert{
 			Name: in.Body.Name, Color: in.Body.Color, SortOrder: in.Body.SortOrder,
+			Archived: in.Body.Archived, Tags: in.Body.Tags,
 		})
 		if err != nil {
-			return nil, huma.Error422UnprocessableEntity(err.Error())
+			return nil, storeErr(err)
 		}
 		// Huma doesn't have an easy way to flip the response code from a
 		// single handler; we set the operation's DefaultStatus to 200 above

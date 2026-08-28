@@ -157,6 +157,29 @@ priority from `1–4`, and inline edits all hit it.
       but didn't open a real browser this session)*
 - [ ] Tag `v0.1.0` and move this file to `plans/done/kanban.md`
       *(user action — release tag is yours)*
+- [x] Sidebar project filter: clicking a project / Inbox narrows Board
+      and List to it; persisted in localStorage; filter chip above the
+      views; new tasks default into the selected project
+- [x] Sidebar tag filter: tags in use listed with counts; a tag spans
+      projects and ANDs with the project filter; new tasks inherit the
+      selected tag
+- [x] Ticket view is a big modal over the main pane (`?task=<id>`);
+      `/task/<id>` redirects; sidebar/header stay usable behind it
+- [x] Sidebar multi-select (Ctrl/⌘-click toggle, Shift-click range);
+      sidebar click on Search jumps to the Board
+- [x] Per-task `model` / `effort` hints for agents (card chip, ticket
+      selects, `/api/tasks` + agent upsert, `kanban-plans` skill updated)
+- [x] Markdown checkboxes in the ticket view are clickable — toggling
+      one rewrites the matching `[ ]`/`[x]` in the body and saves
+- [x] Hide (archive) a project once its work is done so it drops out
+      of the sidebar and filters without deleting its tickets
+- [x] Project-level default tags: tags attached to a project are
+      applied to every ticket in it (e.g. all *2026 Taxes* tickets
+      carry `#tax`)
+- [x] Project editor in the sidebar (name, colour, default tags,
+      archive, delete) — projects used to be API-only
+- [x] Assignee filter (you / Claude) in the sidebar, derived from
+      plan ownership rather than a stored field
 
 ## Open questions
 

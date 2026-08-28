@@ -2,15 +2,27 @@
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  /* Pinned so the ticket modal can start exactly below the header. */
+  --header-h: 3.75rem;
 }
 
 .app-header {
   display: flex;
   align-items: center;
   gap: 1rem;
+  height: var(--header-h);
+  box-sizing: border-box;
   padding: 0.75rem 1.25rem;
   border-bottom: 1px solid var(--hairline);
   background: var(--paper);
+}
+
+.app-header h1 .app-version {
+  font-family: var(--font-body);
+  font-size: 0.65rem;
+  color: var(--muted);
+  letter-spacing: 0.4px;
+  vertical-align: 2px;
 }
 
 .app-header h1 {
@@ -64,16 +76,16 @@
 }
 
 .app-body {
+  /* Read by the ticket modal so its overlay starts at the pane edge. */
+  --sidebar-w: 14rem;
   display: grid;
-  grid-template-columns: 14rem 1fr;
+  grid-template-columns: var(--sidebar-w) 1fr;
   flex: 1;
   min-height: 0;
   transition: grid-template-columns 180ms ease;
 }
 
-.app-body.sidebar-collapsed {
-  grid-template-columns: 2.4rem 1fr;
-}
+.sidebar-collapsed { --sidebar-w: 2.4rem; }
 
 .sidebar {
   border-right: 1px solid var(--hairline);
@@ -98,15 +110,8 @@
   color: var(--ink);
 }
 
-.app-body.sidebar-collapsed .sidebar h2,
-.app-body.sidebar-collapsed .sidebar ul {
-  display: none;
-}
-
-.app-body.sidebar-collapsed .sidebar-head {
-  margin-bottom: 0;
-  justify-content: center;
-}
+.sidebar-collapsed .sidebar :is(h2, ul) { display: none; }
+.sidebar-collapsed .sidebar-head { margin-bottom: 0; justify-content: center; }
 
 .sidebar ul {
   list-style: none;
@@ -119,14 +124,42 @@
 
 .sidebar li {
   display: flex;
+  font-size: 0.9rem;
+}
+
+
+/* Each project is a button so it's keyboard-reachable; styled as a row. */
+.sidebar .row {
+  flex: 1;
+  display: flex;
   align-items: center;
   gap: 0.5rem;
   padding: 0.3rem 0.4rem;
   border-radius: 4px;
-  font-size: 0.9rem;
+  font: inherit;
+  color: var(--ink-2);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-align: left;
+  min-width: 0;
+  transition: background 120ms, color 120ms, border-color 120ms;
 }
 
-.sidebar .name { flex: 1; }
+.sidebar .row:hover { background: rgba(31, 36, 48, 0.05); color: var(--ink); }
+.sidebar .row:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Selected row: a terra-cotta margin tick, like a pen mark in the gutter. */
+.sidebar .row.selected {
+  color: var(--ink);
+  background: rgba(212, 101, 74, 0.08);
+  border-color: rgba(212, 101, 74, 0.35);
+  font-weight: 500;
+}
+
+.sidebar .row.selected .count { color: var(--accent); }
+
+.sidebar .name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
 .sidebar .count { color: var(--muted); font-size: 0.8rem; }
 .sidebar .dot {
   width: 0.6rem;
@@ -134,7 +167,36 @@
   border-radius: 50%;
   display: inline-block;
 }
-.sidebar .empty { color: var(--muted); font-style: italic; }
+.sidebar .empty { padding: 0.3rem 0.4rem; color: var(--muted); font-style: italic; }
+.sidebar .all { margin-bottom: 0.5rem; border-bottom: 1px dashed var(--hairline); padding-bottom: 0.5rem; }
+
+.sidebar .section-head {
+  margin-top: 1.1rem;
+  margin-bottom: 0.5rem;
+}
+
+/* Pencil on hover/focus; a sibling of the row button, never inside it. */
+.sidebar .edit {
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  padding: 0 0.3rem;
+  cursor: pointer;
+  opacity: 0;
+}
+.sidebar li:hover .edit,
+.sidebar li:focus-within .edit { opacity: 1; }
+.sidebar .edit:hover { color: var(--accent); }
+/* "+ new project" borrows the toggle's pill look. */
+.sidebar-toggle.add { margin-left: auto; padding: 2px 7px; }
+.sidebar .archived-head { margin-top: 0.5rem; }
+.sidebar .row.fold { color: var(--muted); }
+.sidebar .row.fold .name { font-family: var(--font-hand); }
+.sidebar .archived .row:not(.selected) { opacity: 0.65; }
+.sidebar .row.tag .hash { color: var(--muted); }
+.sidebar .row.tag.selected .hash { color: var(--accent); }
 .sidebar .inbox { margin-top: 0.5rem; border-top: 1px dashed var(--hairline); padding-top: 0.5rem; }
 
 .app-main {
@@ -156,4 +218,4 @@
   transition: color 120ms, border-color 120ms;
 }
 .sidebar-toggle:hover { color: var(--ink); border-color: var(--ink); }
-.app-body.sidebar-collapsed .sidebar-toggle { color: var(--accent); }
+.sidebar-collapsed .sidebar-toggle { color: var(--accent); }

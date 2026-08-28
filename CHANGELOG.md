@@ -5,13 +5,121 @@ All notable changes to this project will be documented here. Format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-28
+
 ### Changed
+- **Ticket opens as a big modal over the board** — clicking a card
+  (or a search result, or pressing `e`/Enter on a focused card) now
+  opens the ticket in a large dialog over the current view instead
+  of navigating away, so the board stays visible behind it. The
+  header and project sidebar stay live: picking a project while a
+  ticket is open closes it and filters the board underneath. Close
+  with Esc, the ×, or a click on the dimmed area. The ticket is
+  addressed by `?task=<id>` on the current view (`/board?task=5`),
+  so it's still a deep link; the older `/task/<id>` URLs redirect.
 - **Module path renamed** from `github.com/chrishecht/kanban` to
   `github.com/hechtch/kanban` (matches the GitHub handle the
   module will eventually live under).
 
 
+### Fixed
+- **Browsers no longer hold a stale bundle after a redeploy** — the
+  SPA's `index.html` is now served with `Cache-Control: no-cache`
+  (hashed chunks get a year-long `immutable`), in both the standalone
+  binary and the dashboard's shared frontend image. Previously
+  `index.html` had no cache header, so Firefox kept replaying an old
+  copy — and the old chunks it named — for tens of minutes after each
+  deploy.
+- **Validation errors are 422, not 500** — a bad `status`, `priority`,
+  `effort`, or over-long `model` on `PATCH /api/tasks/:id` (and the
+  agent status endpoint) now returns `422` with the reason, instead
+  of a generic `500`. The store tags these with `ErrValidation`.
+- **Every delete asks first** — the board's card menu, the Delete /
+  Backspace key on a focused card, and the list editor's Delete
+  button now confirm before removing a task, matching the ticket
+  view. Previously a stray Backspace on a focused card deleted it
+  silently, with no undo.
+
 ### Added
+- **Filter by assignee** — the sidebar's *All* row is now a segmented
+  `All · you · Claude` control that splits the board between the two
+  owners (counts are in the tooltip), with *All* clearing every filter
+  at once. Pick an owner and the Board and List show
+  only that owner's work; it combines
+  with the project and tag filters and survives a reload. Ownership is
+  the same signal the card's actor chip already showed — a task
+  claimed through the agent API (it carries a `plan_slug`) is
+  Claude's, anything you entered yourself is yours — so the sidebar
+  and the cards can't disagree.
+- **Archive a finished project** — a project can be marked archived
+  from the sidebar's new project editor (or by an agent, with
+  `{"archived":true}` on the project upsert). It folds into an
+  "archived" section at the bottom of the sidebar and its tasks drop
+  off the Board and List, without deleting anything: expand the
+  section and click the project and its tasks come back.
+- **Project default tags** — a project can carry tags that every
+  ticket in it inherits, so all *2026 Taxes* tickets read as `#tax`
+  without tagging each one. The server merges them on read, so
+  dropping a tag from the project drops it from every ticket at once;
+  in the ticket they show as locked chips beside the editable tags.
+- **Project editor** — projects were API-only; the sidebar now has a
+  `+` to create one and a pencil on each row to rename it, change its
+  colour, set its default tags, archive it, or delete it (its tasks
+  move to Inbox).
+- **Clickable checkboxes in notes** — Markdown task-list items
+  (`- [ ]` / `- [x]`) in the ticket's Notes render as live checkboxes.
+  Clicking one (or focusing it and pressing Space) flips the matching
+  line in the body and saves, so a plan's checklist can be worked off
+  from the ticket without opening the editor. Checked items dim;
+  task syntax inside code blocks stays inert.
+- **Version in the header** — the app name now reads `Kanban v0.1.0`,
+  with the version baked in from `frontend/package.json` at build
+  time so the header names what's actually deployed. First real
+  semver for the project (was `0.0.0`).
+- **Suggested model & effort per task** — new optional `model` and
+  `effort` fields (e.g. `fable` / `xhigh` for a security audit,
+  `sonnet` / `high` for mundane work) as a hint for whichever agent
+  picks the task up. Set them from two selects in the ticket modal;
+  they show as a `fable / xhigh` chip on the card. Exposed on
+  `POST`/`PATCH /api/tasks` and the agent upsert
+  (`PUT /api/agent/plans/<slug>`); `effort` is validated against
+  `low / medium / high / xhigh / max`, `model` is free-form.
+- **Multi-select projects in the sidebar** — Ctrl/⌘-click adds or
+  removes a project from the filter, Shift-click selects a range
+  (Inbox counts as the last row). Each selected project is its own
+  removable pill above the board. With more than one project
+  selected, new tasks aren't defaulted into any of them.
+- **Project filter from the sidebar** — click a project (or *Inbox*)
+  in the left panel and the Board and List show only that project's
+  tasks; click it again or *All* to clear. A "showing ● Project ×
+  show all" chip sits above the columns so the filter is visible
+  even with the sidebar collapsed. The selection persists across
+  reloads, and tasks created while filtered (quick-add, new-task
+  modal, ⌘N capture without an `@project`) land in the selected
+  project instead of vanishing into Inbox. Picking any sidebar row
+  while reading a ticket closes the ticket and lands on the Board
+  with that filter applied; from Search it jumps to the Board.
+- **Tag filter across projects** — the sidebar now lists every tag in
+  use with a count (`#finance 5`), most-used first. Click one and the
+  Board and List show only tasks carrying it, whichever project they
+  belong to; combine it with a project to narrow further. Each active
+  filter is its own removable pill above the views. Tasks created
+  while a tag is selected get that tag automatically.
+- **Search across title + body** — `?q=foo` on `GET /api/tasks`
+  and `GET /api/agent/plans` now hits a SQLite FTS5 index covering
+  both `task.title` and `task.body`. Multi-word queries are AND'd
+  (`?q=phase%203` finds tasks mentioning both terms anywhere). The
+  old title-only `LIKE` behavior is gone — bodies are usually
+  where the interesting words live now. The FTS5 virtual table is
+  kept in sync via triggers on `task` INSERT/UPDATE/DELETE and is
+  backfilled from existing rows on first migration.
+- **`/search` tab in the UI** — new lazy-loaded route between
+  *List* and the quick-capture button. Big text input (autofocus,
+  200ms debounce), project filter chips, status filter chips,
+  results as a flat scannable list. State lives in the URL
+  (`?q=`, `?project=`, `?status=`), so a search is shareable and
+  survives reload. `⌘F` or `/` from anywhere navigates to
+  `/search` and focuses the input.
 - **OpenAPI 3.1 spec + Swagger UI** — migrated the entire HTTP
   surface to [huma v2](https://github.com/danielgtaylor/huma).
   Each handler is now a typed function `func(ctx, *Input)

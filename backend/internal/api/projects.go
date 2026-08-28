@@ -28,19 +28,23 @@ type listProjectsOutput struct {
 // assigned server-side; sort_order defaults to 0 if omitted.
 type createProjectInput struct {
 	Body struct {
-		Name      string  `json:"name" doc:"Display name (required)"`
-		Color     string  `json:"color,omitempty" doc:"Hex color, defaults to #1f2430"`
-		Slug      string  `json:"slug,omitempty" doc:"Override the auto-derived slug"`
-		SortOrder float64 `json:"sort_order,omitempty"`
+		Name      string   `json:"name" doc:"Display name (required)"`
+		Color     string   `json:"color,omitempty" doc:"Hex color, defaults to #1f2430"`
+		Slug      string   `json:"slug,omitempty" doc:"Override the auto-derived slug"`
+		SortOrder float64  `json:"sort_order,omitempty"`
+		Archived  bool     `json:"archived,omitempty" doc:"Finished project: hidden from the sidebar, tasks off the board"`
+		Tags      []string `json:"tags,omitempty" doc:"Tags every task in this project carries"`
 	}
 }
 
 type patchProjectInput struct {
 	ID   int64 `path:"id"`
 	Body struct {
-		Name      *string  `json:"name,omitempty" doc:"Display name"`
-		Color     *string  `json:"color,omitempty" doc:"Hex color (e.g. #d4654a)"`
-		SortOrder *float64 `json:"sort_order,omitempty" doc:"Fractional sort order"`
+		Name      *string   `json:"name,omitempty" doc:"Display name"`
+		Color     *string   `json:"color,omitempty" doc:"Hex color (e.g. #d4654a)"`
+		SortOrder *float64  `json:"sort_order,omitempty" doc:"Fractional sort order"`
+		Archived  *bool     `json:"archived,omitempty" doc:"Finished project: hidden from the sidebar, tasks off the board"`
+		Tags      *[]string `json:"tags,omitempty" doc:"Replaces the project's tag set; every task in the project carries these"`
 	}
 }
 
@@ -71,9 +75,10 @@ func registerProjects(api huma.API, st *store.Store) {
 	}, func(_ context.Context, in *createProjectInput) (*projectOutput, error) {
 		out, err := st.CreateProject(store.Project{
 			Name: in.Body.Name, Color: in.Body.Color, Slug: in.Body.Slug, SortOrder: in.Body.SortOrder,
+			Archived: in.Body.Archived, Tags: in.Body.Tags,
 		})
 		if err != nil {
-			return nil, huma.Error422UnprocessableEntity(err.Error())
+			return nil, storeErr(err)
 		}
 		return &projectOutput{Body: out}, nil
 	})
@@ -87,6 +92,7 @@ func registerProjects(api huma.API, st *store.Store) {
 	}, func(_ context.Context, in *patchProjectInput) (*projectOutput, error) {
 		out, err := st.UpdateProject(in.ID, store.ProjectPatch{
 			Name: in.Body.Name, Color: in.Body.Color, SortOrder: in.Body.SortOrder,
+			Archived: in.Body.Archived, Tags: in.Body.Tags,
 		})
 		if err != nil {
 			return nil, storeErr(err)

@@ -5,6 +5,10 @@
   padding: 0.75rem;
 }
 
+app-filter-bar:not(:empty) + .board {
+  padding-top: 0.5rem;
+}
+
 .column {
   background: var(--paper);
   border: 1px solid var(--hairline);

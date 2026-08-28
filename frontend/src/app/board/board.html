@@ -1,3 +1,5 @@
+<app-filter-bar />
+
 <div
   class="board"
   cdkDropListGroup
@@ -95,6 +97,7 @@
     mode="new"
     [projects]="projectsSig()"
     [initialStatus]="creating()!.status"
+    [prefill]="filterProject() ? { project_id: filterProject()!.id } : null"
     (save)="onModalSave($event)"
     (cancel)="closeModals()"
   />

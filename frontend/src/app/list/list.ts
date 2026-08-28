@@ -3,6 +3,8 @@ import { FormsModule } from '@angular/forms';
 
 import { COLUMN_STATUSES, Project, Status, STATUS_LABEL, Task } from '../models';
 import { TaskStore } from '../task-store';
+import { FilterBar } from '../shared/filter-bar';
+import { confirmDelete } from '../shared/confirm-delete';
 
 interface Group {
   project: Project | null;
@@ -22,7 +24,7 @@ interface Editing {
 @Component({
   selector: 'app-list',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, FilterBar],
   templateUrl: './list.html',
   styleUrl: './list.css',
 })
@@ -30,7 +32,8 @@ export class List {
   private store = inject(TaskStore);
 
   readonly statuses = [...COLUMN_STATUSES, 'backlog' as Status];
-  readonly projects = this.store.projects;
+  /** Offered in the inline project select — archived projects aren't new homes. */
+  readonly projects = this.store.activeProjects;
 
   statusLabel(s: Status): string {
     return STATUS_LABEL[s];
@@ -38,18 +41,31 @@ export class List {
   readonly editing = signal<Editing | null>(null);
 
   groups = computed<Group[]>(() => {
+    const filter = this.store.projectFilter();
+    // Tag and assignee both span projects, so under either one most project
+    // sections would otherwise render empty.
+    const crossFilter =
+      this.store.tagFilter() !== undefined || this.store.assigneeFilter() !== undefined;
     const byProj = new Map<number | null, Task[]>();
-    for (const t of this.store.tasks()) {
+    for (const t of this.store.visibleTasks()) {
       const key = t.project_id;
       if (!byProj.has(key)) byProj.set(key, []);
       byProj.get(key)!.push(t);
     }
     const out: Group[] = [];
     for (const p of this.store.projects()) {
+      // Unfiltered: every project gets a section, even an empty one.
+      // Project filter: only the selected project's section.
+      // Tag/assignee filter: only projects that actually have a match.
+      // Archived: folded away entirely unless explicitly selected, matching
+      // the sidebar — otherwise finished projects pile up as empty sections.
+      if (p.archived && !filter.has(p.id)) continue;
+      if (filter.size && !filter.has(p.id)) continue;
+      if (crossFilter && !byProj.has(p.id)) continue;
       out.push({ project: p, tasks: (byProj.get(p.id) ?? []).slice().sort(sortKey) });
     }
-    if (byProj.has(null)) {
-      out.push({ project: null, tasks: byProj.get(null)!.slice().sort(sortKey) });
+    if (filter.has(null) || (!filter.size && byProj.has(null))) {
+      out.push({ project: null, tasks: (byProj.get(null) ?? []).slice().sort(sortKey) });
     }
     return out;
   });
@@ -91,6 +107,7 @@ export class List {
   }
 
   async deleteTask(task: Task): Promise<void> {
+    if (!confirmDelete(task)) return;
     await this.store.remove(task.id);
     if (this.editing()?.taskId === task.id) this.editing.set(null);
   }

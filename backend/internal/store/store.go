@@ -52,6 +52,8 @@ func (s *Store) migrate() error {
 			sort_order    REAL NOT NULL DEFAULT 0,
 			plan_slug     TEXT,
 			git_branch    TEXT,
+			model         TEXT,
+			effort        TEXT,
 			created_at    TEXT NOT NULL DEFAULT (datetime('now')),
 			updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
 			completed_at  TEXT
@@ -64,6 +66,12 @@ func (s *Store) migrate() error {
 			task_id  INTEGER NOT NULL REFERENCES task(id) ON DELETE CASCADE,
 			tag_id   INTEGER NOT NULL REFERENCES tag(id)  ON DELETE CASCADE,
 			PRIMARY KEY (task_id, tag_id)
+		)`,
+		// Tags a project stamps onto every task in it. Same shape as task_tag.
+		`CREATE TABLE IF NOT EXISTS project_tag (
+			project_id  INTEGER NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+			tag_id      INTEGER NOT NULL REFERENCES tag(id)     ON DELETE CASCADE,
+			PRIMARY KEY (project_id, tag_id)
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_task_status ON task(status, sort_order)`,
 		`CREATE INDEX IF NOT EXISTS idx_task_project ON task(project_id, sort_order)`,
@@ -92,11 +100,23 @@ func (s *Store) migrate() error {
 	if err := s.addColumnIfMissing("task", "git_branch", "TEXT"); err != nil {
 		return err
 	}
+	if err := s.addColumnIfMissing("task", "model", "TEXT"); err != nil {
+		return err
+	}
+	if err := s.addColumnIfMissing("task", "effort", "TEXT"); err != nil {
+		return err
+	}
 	if err := s.addColumnIfMissing("project", "slug", "TEXT"); err != nil {
+		return err
+	}
+	if err := s.addColumnIfMissing("project", "archived", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return err
 	}
 	if err := s.migrateTaskStatusConstraint(); err != nil {
 		return fmt.Errorf("migrate task status constraint: %w", err)
+	}
+	if err := s.setupTaskFTS(); err != nil {
+		return fmt.Errorf("setup task_fts: %w", err)
 	}
 	// Partial unique indexes: enforce uniqueness only among non-NULL slugs.
 	for _, idx := range []string{
@@ -150,6 +170,8 @@ func (s *Store) migrateTaskStatusConstraint() error {
 		sort_order    REAL NOT NULL DEFAULT 0,
 		plan_slug     TEXT,
 		git_branch    TEXT,
+		model         TEXT,
+		effort        TEXT,
 		created_at    TEXT NOT NULL DEFAULT (datetime('now')),
 		updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
 		completed_at  TEXT
@@ -158,10 +180,10 @@ func (s *Store) migrateTaskStatusConstraint() error {
 	}
 	if _, err := tx.Exec(`
 		INSERT INTO task_new (id, title, body, status, priority, due_text,
-		                     project_id, sort_order, plan_slug, git_branch,
+		                     project_id, sort_order, plan_slug, git_branch, model, effort,
 		                     created_at, updated_at, completed_at)
 		SELECT id, title, body, status, priority, due_text,
-		       project_id, sort_order, plan_slug, git_branch,
+		       project_id, sort_order, plan_slug, git_branch, model, effort,
 		       created_at, updated_at, completed_at
 		  FROM task`); err != nil {
 		return err
@@ -186,6 +208,55 @@ func (s *Store) migrateTaskStatusConstraint() error {
 		}
 	}
 	return tx.Commit()
+}
+
+// setupTaskFTS creates the FTS5 virtual table that mirrors task.title and
+// task.body, plus the triggers that keep it in sync. Idempotent — uses
+// IF NOT EXISTS everywhere. On first creation, backfills from existing rows.
+func (s *Store) setupTaskFTS() error {
+	// Was task_fts already created?
+	var existing int
+	if err := s.db.QueryRow(
+		`SELECT COUNT(*) FROM sqlite_schema WHERE type='table' AND name='task_fts'`,
+	).Scan(&existing); err != nil {
+		return err
+	}
+
+	stmts := []string{
+		`CREATE VIRTUAL TABLE IF NOT EXISTS task_fts USING fts5(
+			title, body,
+			content='task', content_rowid='id',
+			tokenize='unicode61 remove_diacritics 2'
+		)`,
+		`CREATE TRIGGER IF NOT EXISTS task_fts_ai AFTER INSERT ON task BEGIN
+			INSERT INTO task_fts(rowid, title, body) VALUES (new.id, new.title, new.body);
+		END`,
+		`CREATE TRIGGER IF NOT EXISTS task_fts_ad AFTER DELETE ON task BEGIN
+			INSERT INTO task_fts(task_fts, rowid, title, body)
+			  VALUES('delete', old.id, old.title, old.body);
+		END`,
+		`CREATE TRIGGER IF NOT EXISTS task_fts_au AFTER UPDATE ON task BEGIN
+			INSERT INTO task_fts(task_fts, rowid, title, body)
+			  VALUES('delete', old.id, old.title, old.body);
+			INSERT INTO task_fts(rowid, title, body) VALUES (new.id, new.title, new.body);
+		END`,
+	}
+	for _, stmt := range stmts {
+		if _, err := s.db.Exec(stmt); err != nil {
+			return fmt.Errorf("exec %q: %w", firstLine(stmt), err)
+		}
+	}
+
+	// On first creation, backfill from existing task rows. Subsequent runs
+	// see existing > 0 and skip this.
+	if existing == 0 {
+		if _, err := s.db.Exec(
+			`INSERT INTO task_fts(rowid, title, body) SELECT id, title, body FROM task`,
+		); err != nil {
+			return fmt.Errorf("backfill task_fts: %w", err)
+		}
+	}
+	return nil
 }
 
 // backfillProjectSlugs derives a slug for any project row that doesn't have

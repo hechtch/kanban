@@ -1,0 +1,106 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(31, 36, 48, 0.35);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  z-index: 100;
+  padding-top: 6rem;
+}
+
+.dialog {
+  background: var(--paper);
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  width: min(26rem, 95%);
+  box-shadow: 0 10px 30px rgba(31, 36, 48, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.dialog h2 {
+  font-family: var(--font-hand);
+  font-size: 1.4rem;
+  margin: 0;
+  color: var(--ink);
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+label em {
+  text-transform: none;
+  letter-spacing: 0;
+  font-style: italic;
+  margin-left: 0.3rem;
+}
+
+input[type="text"] {
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  background: #fff;
+  font: inherit;
+  color: var(--ink);
+}
+input[type="text"]:focus { outline: none; border-color: var(--accent); }
+
+.swatches {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink-2);
+}
+input[type="color"] {
+  width: 2.2rem;
+  height: 1.6rem;
+  padding: 0;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+}
+
+label.check {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.85rem;
+  color: var(--ink);
+}
+label.check input { accent-color: var(--accent); }
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+.spacer { flex: 1; }
+.actions button {
+  font: inherit;
+  font-size: 0.85rem;
+  border-radius: 999px;
+  padding: 0.35rem 0.85rem;
+  cursor: pointer;
+}
+.ghost { background: transparent; border: 1px solid var(--hairline); color: var(--ink-2); }
+.ghost:hover { border-color: var(--ink); color: var(--ink); }
+.ghost.danger { color: var(--accent); border-color: transparent; }
+.ghost.danger:hover { border-color: var(--accent); }
+.primary { background: var(--accent); color: #fff; border: none; }
+.primary:disabled { opacity: 0.5; cursor: default; }

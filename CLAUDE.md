@@ -50,6 +50,23 @@ same bundle works in both modes. **Never hardcode `/api` or
   this in the handler.
 - **Tags are replaced, not diffed.** `POST` / `PATCH` with a `tags`
   array replaces the whole set inside a transaction.
+- **Project tags are merged on read, never copied.** A project's
+  `tags` are stamped onto every task in it by `store.attachTags`
+  at read time; `setTaskTags` strips inherited tags from a task's
+  own set before writing. That's what makes dropping a tag from a
+  project drop it from every task at once, with nothing to
+  backfill — don't "fix" this by writing them onto task rows.
+- **Assignee is derived, not stored.** `models.ts:assigneeOf` maps
+  `plan_slug != null` → Claude, everything else → you. The card's
+  actor chip and the sidebar's assignee filter both call it, so
+  they can't drift. Don't add an `assignee` column — plan ownership
+  already carries this, and a second field would contradict the
+  chip the moment an agent claimed a plan.
+- **Archiving is a view concern, not a filter on the API.**
+  `project.archived` hides a project's tasks in the frontend
+  (`TaskStore.liveTasks`); every endpoint still returns them.
+  Selecting an archived project in the sidebar brings its tasks
+  back.
 - **All routes under `/api/*`.** The proxy depends on this.
 - **Data lives outside the tree**: `~/.kanban/data/` (override with
   `KANBAN_DB_PATH`). Never commit `*.db*` files.
@@ -101,12 +118,16 @@ The kanban is **API-first for Claude agents**: it's a place to keep
 plan state alive across sessions. When you're working on a plan in
 this fleet, you should be talking to the kanban as you go.
 
-> **Keep `~/.claude/CLAUDE-kanban.md` in sync.** That file is the
-> brief other Claude sessions read to learn this API. Any time you
+> **Keep the `kanban-plans` skill in sync.** The brief other Claude
+> sessions read to learn this API now lives at
+> `~/.claude/skills/kanban-plans/SKILL.md` (versioned in
+> `~/projects/claude-profiles/skills/kanban-plans/`). Any time you
 > change endpoints, payload shape, the status enum, slug rules, or
-> the recommended workflow here, update that file in the same
-> commit — otherwise agents in other projects will be working from
-> a stale spec.
+> the recommended workflow here, update that skill in the same
+> commit — edit the installed copy, then run
+> `~/projects/claude-profiles/update-from.sh` and commit there —
+> otherwise agents in other projects will be working from a stale
+> spec.
 
 ### Base URL
 
@@ -171,8 +192,9 @@ endpoint list here. URLs (dashboard deployment):
 When changing endpoints, the typed input/output structs in
 `backend/internal/api/*.go` ARE the contract — huma regenerates
 the spec at startup, so there's no separate spec to keep in sync.
-You DO still need to update `~/.claude/CLAUDE-kanban.md` whenever
-the agent-facing surface changes (see top of this section).
+You DO still need to update the `kanban-plans` skill
+(`~/.claude/skills/kanban-plans/SKILL.md`) whenever the agent-facing
+surface changes (see top of this section).
 
 ### Endpoints in one screen
 
@@ -180,14 +202,16 @@ the agent-facing surface changes (see top of this section).
 GET    /api/agent/plans                      list (?project=<slug> filter)
 GET    /api/agent/plans/<slug>               { slug, task, activity[] }
 PUT    /api/agent/plans/<slug>               upsert (title, body, priority,
-                                             due_text, project_slug, tags)
+                                             due_text, project_slug, tags,
+                                             git_branch, model, effort)
 PUT    /api/agent/plans/<slug>/status        { status, note? }
 POST   /api/agent/plans/<slug>/notes         { text }
 GET    /api/agent/plans/<slug>/activity      timeline (oldest first)
 
 GET    /api/agent/projects                   list w/ plan_count
 GET    /api/agent/projects/<slug>            single
-PUT    /api/agent/projects/<slug>            upsert (name, color, sort_order)
+PUT    /api/agent/projects/<slug>            upsert (name, color, sort_order,
+                                             archived, tags)
 GET    /api/agent/projects/<slug>/plans      same as /plans?project=<slug>
 ```
 
@@ -199,9 +223,26 @@ GET    /api/agent/projects/<slug>/plans      same as /plans?project=<slug>
 - `git_branch` is a free-form string on the task; agents set it
   to track which branch carries the work. Renders as a monospace
   chip on the card.
-- `body` is markdown, rendered at `/task/<task_id>` in the UI. The
-  rendered view has its own edit toggle, so a human can fix typos
-  without going through the API.
+- `model` / `effort` are per-task hints for whichever agent picks
+  the work up (`fable` / `xhigh` for a security audit, `sonnet` /
+  `high` for mundane work). `model` is free-form (lowercased,
+  trimmed — model names churn, so no enum); `effort` is validated
+  against `low / medium / high / xhigh / max` in
+  `store/tasks.go:validEffort`. Both nullable; PATCH / upsert treat
+  `null` as clear and absent as leave-alone, like `git_branch`.
+  Rendered as a `fable / xhigh` chip on the card and two selects in
+  the ticket modal.
+- **Projects** carry `archived` (finished — folded away in the
+  sidebar, tasks off the board, nothing deleted) and `tags` (every
+  task in the project inherits them). Both on the upsert; `tags`
+  replaces the whole set.
+- `body` is markdown, rendered in the ticket modal in the UI
+  (`/board?task=<task_id>`; the older `/task/<task_id>` form still
+  works — it redirects). The rendered view has its own edit toggle,
+  so a human can fix typos without going through the API. Markdown
+  task-list items (`- [ ]` / `- [x]`) render as live checkboxes a
+  human can tick off, which rewrites the body — so a plan's
+  checklist can move without an API call.
 - An agent task is identified by `task.plan_slug != null`. Human
   tasks created via the regular `/api/tasks` POST do not appear in
   `/api/agent/plans` — that filter is intentional.

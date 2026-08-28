@@ -6,6 +6,13 @@ type Project struct {
 	Name      string  `json:"name"`
 	Color     string  `json:"color"`
 	SortOrder float64 `json:"sort_order"`
+	// Archived projects are finished: hidden from the sidebar and their
+	// tasks left off the board unless the project is explicitly selected.
+	// Nothing is deleted.
+	Archived bool `json:"archived"`
+	// Tags every task in the project carries. Merged into each task's
+	// `tags` on read (see attachTags), never copied onto the task rows.
+	Tags []string `json:"tags"`
 }
 
 type Task struct {
@@ -19,6 +26,8 @@ type Task struct {
 	SortOrder   float64  `json:"sort_order"`
 	PlanSlug    *string  `json:"plan_slug,omitempty"`
 	GitBranch   *string  `json:"git_branch,omitempty"`
+	Model       *string  `json:"model,omitempty"`  // suggested Claude model, e.g. "fable", "sonnet"
+	Effort      *string  `json:"effort,omitempty"` // suggested reasoning effort: low … max
 	CreatedAt   string   `json:"created_at"`
 	UpdatedAt   string   `json:"updated_at"`
 	CompletedAt *string  `json:"completed_at"`
@@ -50,6 +59,10 @@ type PlanUpsert struct {
 	Tags           *[]string
 	GitBranch      *string
 	ClearGitBranch bool
+	Model          *string
+	ClearModel     bool
+	Effort         *string
+	ClearEffort    bool
 }
 
 // ProjectUpsert is the payload for PUT /api/agent/projects/:slug.
@@ -57,6 +70,8 @@ type ProjectUpsert struct {
 	Name      *string
 	Color     *string
 	SortOrder *float64
+	Archived  *bool
+	Tags      *[]string
 }
 
 type TaskFilter struct {
@@ -66,12 +81,14 @@ type TaskFilter struct {
 	Query     string
 }
 
-// ProjectPatch — nil means "leave alone". Name/Color/SortOrder are non-null
-// columns; no need to model "clear to null".
+// ProjectPatch — nil means "leave alone". All columns are non-null, so
+// there's no "clear to null" to model; Tags replaces the whole set.
 type ProjectPatch struct {
 	Name      *string
 	Color     *string
 	SortOrder *float64
+	Archived  *bool
+	Tags      *[]string
 }
 
 // TaskPatch — nil means "leave alone". ProjectID uses a separate ClearProjectID
@@ -88,4 +105,8 @@ type TaskPatch struct {
 	Tags           *[]string
 	GitBranch      *string
 	ClearGitBranch bool
+	Model          *string
+	ClearModel     bool
+	Effort         *string
+	ClearEffort    bool
 }

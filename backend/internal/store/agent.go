@@ -70,22 +70,46 @@ type queryer interface {
 	QueryRow(query string, args ...any) *sql.Row
 }
 
+// PlanFilter narrows a list-plans request by project and/or text search.
+// An empty PlanFilter returns every plan-owned task.
+type PlanFilter struct {
+	ProjectSlug string
+	Query       string
+}
+
 // ListPlanTasks returns tasks whose plan_slug is set, newest-first.
-// If projectSlug is non-empty, filters to plans belonging to that project
-// (returns ErrNotFound if the project slug doesn't exist).
-func (s *Store) ListPlanTasks(projectSlug ...string) ([]Task, error) {
+// Filters by project_slug (returns ErrNotFound if unknown) and/or by `q`
+// (FTS5 match on title + body).
+//
+// Variadic for backwards compatibility: existing callers pass a single
+// project slug string; new callers can pass a PlanFilter.
+func (s *Store) ListPlanTasks(filter ...any) ([]Task, error) {
+	var f PlanFilter
+	if len(filter) > 0 {
+		switch v := filter[0].(type) {
+		case PlanFilter:
+			f = v
+		case string:
+			f.ProjectSlug = v
+		}
+	}
+
 	q := `SELECT id, title, body, status, priority, due_text, project_id,
-	             sort_order, plan_slug, git_branch,
+	             sort_order, plan_slug, git_branch, model, effort,
 	             created_at, updated_at, completed_at
 	        FROM task WHERE plan_slug IS NOT NULL`
 	args := []any{}
-	if len(projectSlug) > 0 && projectSlug[0] != "" {
-		proj, err := s.GetProjectBySlug(projectSlug[0])
+	if f.ProjectSlug != "" {
+		proj, err := s.GetProjectBySlug(f.ProjectSlug)
 		if err != nil {
 			return nil, err
 		}
 		q += " AND project_id = ?"
 		args = append(args, proj.ID)
+	}
+	if f.Query != "" {
+		q += " AND id IN (SELECT rowid FROM task_fts WHERE task_fts MATCH ?)"
+		args = append(args, ftsQuoteQuery(f.Query))
 	}
 	q += " ORDER BY updated_at DESC, id DESC"
 
@@ -96,27 +120,18 @@ func (s *Store) ListPlanTasks(projectSlug ...string) ([]Task, error) {
 	defer rows.Close()
 
 	out := []Task{}
-	ids := []int64{}
 	for rows.Next() {
 		t, err := scanTask(rows)
 		if err != nil {
 			return nil, err
 		}
 		out = append(out, t)
-		ids = append(ids, t.ID)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	tagsByTask, err := s.tagsForTasks(ids)
-	if err != nil {
+	if err := s.attachTags(out); err != nil {
 		return nil, err
-	}
-	for i := range out {
-		out[i].Tags = tagsByTask[out[i].ID]
-		if out[i].Tags == nil {
-			out[i].Tags = []string{}
-		}
 	}
 	return out, nil
 }
@@ -125,7 +140,7 @@ func (s *Store) ListPlanTasks(projectSlug ...string) ([]Task, error) {
 func (s *Store) GetTaskByPlanSlug(slug string) (Task, error) {
 	row := s.db.QueryRow(
 		`SELECT id, title, body, status, priority, due_text, project_id,
-		        sort_order, plan_slug, git_branch,
+		        sort_order, plan_slug, git_branch, model, effort,
 		        created_at, updated_at, completed_at
 		   FROM task WHERE plan_slug = ?`, slug,
 	)
@@ -136,15 +151,11 @@ func (s *Store) GetTaskByPlanSlug(slug string) (Task, error) {
 	if err != nil {
 		return Task{}, err
 	}
-	tags, err := s.tagsForTasks([]int64{t.ID})
-	if err != nil {
+	ts := []Task{t}
+	if err := s.attachTags(ts); err != nil {
 		return Task{}, err
 	}
-	t.Tags = tags[t.ID]
-	if t.Tags == nil {
-		t.Tags = []string{}
-	}
-	return t, nil
+	return ts[0], nil
 }
 
 // UpsertPlan inserts a new task with the given slug, or patches the existing
@@ -166,7 +177,7 @@ func (s *Store) UpsertPlan(slug string, p PlanUpsert) (Task, bool, error) {
 		} else {
 			proj, err := s.GetProjectBySlug(trimmed)
 			if errors.Is(err, ErrNotFound) {
-				return Task{}, false, fmt.Errorf("unknown project_slug %q", trimmed)
+				return Task{}, false, fmt.Errorf("%w: unknown project_slug %q", ErrValidation, trimmed)
 			}
 			if err != nil {
 				return Task{}, false, err
@@ -190,6 +201,10 @@ func (s *Store) UpsertPlan(slug string, p PlanUpsert) (Task, bool, error) {
 			Tags:           p.Tags,
 			GitBranch:      p.GitBranch,
 			ClearGitBranch: p.ClearGitBranch,
+			Model:          p.Model,
+			ClearModel:     p.ClearModel,
+			Effort:         p.Effort,
+			ClearEffort:    p.ClearEffort,
 		}
 		updated, err := s.UpdateTask(existing.ID, patch)
 		return updated, false, err
@@ -227,6 +242,17 @@ func (s *Store) UpsertPlan(slug string, p PlanUpsert) (Task, bool, error) {
 	if p.GitBranch != nil && !p.ClearGitBranch {
 		gitBranch = p.GitBranch
 	}
+	var model, effort *string
+	if p.Model != nil && !p.ClearModel {
+		if model, err = normalizeModel(p.Model); err != nil {
+			return Task{}, false, err
+		}
+	}
+	if p.Effort != nil && !p.ClearEffort {
+		if effort, err = normalizeEffort(p.Effort); err != nil {
+			return Task{}, false, err
+		}
+	}
 
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -235,9 +261,9 @@ func (s *Store) UpsertPlan(slug string, p PlanUpsert) (Task, bool, error) {
 	defer func() { _ = tx.Rollback() }()
 
 	res, err := tx.Exec(
-		`INSERT INTO task (title, body, status, priority, due_text, project_id, sort_order, plan_slug, git_branch)
-		 VALUES (?, ?, 'todo', ?, ?, ?, 0, ?, ?)`,
-		title, body, priority, due, projID, slug, nullStr(gitBranch),
+		`INSERT INTO task (title, body, status, priority, due_text, project_id, sort_order, plan_slug, git_branch, model, effort)
+		 VALUES (?, ?, 'todo', ?, ?, ?, 0, ?, ?, ?, ?)`,
+		title, body, priority, due, projID, slug, nullStr(gitBranch), nullStr(model), nullStr(effort),
 	)
 	if err != nil {
 		return Task{}, false, err
@@ -268,7 +294,7 @@ func (s *Store) UpsertPlan(slug string, p PlanUpsert) (Task, bool, error) {
 // Returns ErrNotFound if no task with that slug exists.
 func (s *Store) SetPlanStatus(slug, status, note string) (Task, error) {
 	if !validStatus[status] {
-		return Task{}, fmt.Errorf("invalid status %q", status)
+		return Task{}, fmt.Errorf("%w: invalid status %q", ErrValidation, status)
 	}
 	existing, err := s.GetTaskByPlanSlug(slug)
 	if err != nil {

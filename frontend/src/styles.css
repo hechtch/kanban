@@ -53,6 +53,17 @@ html, body {
 .body-rendered p { margin: 0.6em 0; }
 .body-rendered :is(ul, ol) { padding-left: 1.6em; margin: 0.6em 0; }
 .body-rendered li { margin: 0.2em 0; }
+.body-rendered li:has(> input.md-check) { list-style: none; margin-left: -1.3em; }
+.body-rendered input.md-check {
+  cursor: pointer;
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+  margin: 0 6px 0 0;
+  vertical-align: -2px;
+}
+.body-rendered li:has(> input.md-check:checked) { color: var(--ink-2); }
+.body-rendered li:has(> input.md-check:checked) > :is(ul, ol) { color: var(--ink); }
 .body-rendered code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.9em;

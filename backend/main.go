@@ -57,13 +57,18 @@ func spaHandler(web fs.FS) http.Handler {
 		}
 		// Strip leading slash for fs.FS lookups.
 		name := strings.TrimPrefix(clean, "/")
-		if _, err := fs.Stat(web, name); err != nil {
-			// Unknown path → SPA fallback.
+		if _, err := fs.Stat(web, name); err != nil || name == "index.html" {
+			// index.html (directly or as the SPA fallback for an unknown
+			// path) must never be cached: it names the hashed chunks, and a
+			// stale copy keeps serving an old bundle after a redeploy.
+			w.Header().Set("Cache-Control", "no-cache, must-revalidate")
 			r2 := r.Clone(r.Context())
 			r2.URL.Path = "/"
 			fileServer.ServeHTTP(w, r2)
 			return
 		}
+		// Everything else in the bundle is content-hashed → immutable.
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		fileServer.ServeHTTP(w, r)
 	})
 }
