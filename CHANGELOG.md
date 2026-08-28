@@ -39,6 +39,12 @@ All notable changes to this project will be documented here. Format follows
   silently, with no undo.
 
 ### Added
+- **Clickable checkboxes in notes** — Markdown task-list items
+  (`- [ ]` / `- [x]`) in the ticket's Notes render as live checkboxes.
+  Clicking one (or focusing it and pressing Space) flips the matching
+  line in the body and saves, so a plan's checklist can be worked off
+  from the ticket without opening the editor. Checked items dim;
+  task syntax inside code blocks stays inert.
 - **Version in the header** — the app name now reads `Kanban v0.1.0`,
   with the version baked in from `frontend/package.json` at build
   time so the header names what's actually deployed. First real

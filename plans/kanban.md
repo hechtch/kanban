@@ -169,6 +169,13 @@ priority from `1–4`, and inline edits all hit it.
       sidebar click on Search jumps to the Board
 - [x] Per-task `model` / `effort` hints for agents (card chip, ticket
       selects, `/api/tasks` + agent upsert, `kanban-plans` skill updated)
+- [x] Markdown checkboxes in the ticket view are clickable — toggling
+      one rewrites the matching `[ ]`/`[x]` in the body and saves
+- [ ] Hide (archive) a project once its work is done so it drops out
+      of the sidebar and filters without deleting its tickets
+- [ ] Project-level default tags: tags attached to a project are
+      applied to every ticket in it (e.g. all *2026 Taxes* tickets
+      carry `#tax`)
 
 ## Open questions
 

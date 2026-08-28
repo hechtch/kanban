@@ -161,7 +161,7 @@ Write notes, repro steps, links — anything.
 `⌘↵` to save · `Esc` to cancel"
         ></textarea>
       } @else if (t.body.trim()) {
-        <div class="body-rendered" [innerHTML]="renderedBody()"></div>
+        <div class="body-rendered" [innerHTML]="renderedBody()" (click)="onBodyClick($event)"></div>
       } @else {
         <p class="body-empty" (click)="startBodyEdit()">
           No notes yet — click <em>Edit</em> (or press <kbd>e</kbd>) to add some.

@@ -19,7 +19,7 @@ import { COLUMN_STATUSES, EFFORT_OPTIONS, MODEL_OPTIONS, Project, Status, STATUS
 import { TaskStore } from '../task-store';
 import { TicketNav } from '../shared/ticket-nav';
 import { confirmDelete } from '../shared/confirm-delete';
-import { renderMarkdown } from './markdown';
+import { renderMarkdown, toggleCheckbox } from './markdown';
 
 /**
  * The ticket, as a big modal over whatever view is underneath. Hosted by
@@ -146,6 +146,23 @@ export class TaskView implements AfterViewInit, OnDestroy {
   }
 
   cancelBody(): void { this.editingBody.set(false); }
+
+  /**
+   * Clicks inside the rendered body: a task-list checkbox flips the matching
+   * `[ ]` / `[x]` in the source and saves. Default is prevented so the DOM
+   * stays a pure function of the task — the re-render carries the new state
+   * (and a failed PATCH rolls it back visibly).
+   */
+  async onBodyClick(event: MouseEvent): Promise<void> {
+    const el = event.target as HTMLElement | null;
+    if (!(el instanceof HTMLInputElement) || !el.classList.contains('md-check')) return;
+    event.preventDefault();
+    const t = this.task();
+    if (!t) return;
+    const body = toggleCheckbox(t.body ?? '', Number(el.dataset['check']));
+    if (body === null) return;
+    await this.store.patch(t.id, { body });
+  }
 
   onBodyKeydown(event: KeyboardEvent): void {
     if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
