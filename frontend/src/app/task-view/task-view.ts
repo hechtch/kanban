@@ -1,4 +1,5 @@
 import {
+  AfterViewInit,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -6,32 +7,39 @@ import {
   ElementRef,
   HostListener,
   inject,
+  input,
+  OnDestroy,
   signal,
   ViewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { toSignal } from '@angular/core/rxjs-interop';
-import { map } from 'rxjs';
 
-import { COLUMN_STATUSES, Project, Status, STATUS_LABEL, Task } from '../models';
+import { COLUMN_STATUSES, EFFORT_OPTIONS, MODEL_OPTIONS, Project, Status, STATUS_LABEL, Task } from '../models';
 import { TaskStore } from '../task-store';
+import { TicketNav } from '../shared/ticket-nav';
+import { confirmDelete } from '../shared/confirm-delete';
 import { renderMarkdown } from './markdown';
 
+/**
+ * The ticket, as a big modal over whatever view is underneath. Hosted by
+ * `App` whenever `?task=<id>` is in the URL; closing means clearing that
+ * param (see `TicketNav`), so the board/list behind it is untouched.
+ */
 @Component({
   selector: 'app-task-view',
   standalone: true,
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule],
   templateUrl: './task-view.html',
   styleUrl: './task-view.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class TaskView {
+export class TaskView implements AfterViewInit, OnDestroy {
   protected store = inject(TaskStore);
-  private route = inject(ActivatedRoute);
-  private router = inject(Router);
+  protected nav = inject(TicketNav);
   private sanitizer = inject(DomSanitizer);
+
+  readonly taskId = input.required<number>();
 
   readonly statuses: Status[] = [...COLUMN_STATUSES, 'backlog'];
 
@@ -39,17 +47,16 @@ export class TaskView {
     return STATUS_LABEL[s];
   }
   readonly priorities = [0, 1, 2, 3] as const;
-
-  private readonly idSig = toSignal(
-    this.route.paramMap.pipe(map(p => Number(p.get('id')))),
-    { initialValue: NaN },
-  );
+  readonly models: readonly string[] = MODEL_OPTIONS;
+  readonly efforts: readonly string[] = EFFORT_OPTIONS;
 
   readonly task = computed<Task | null>(() => {
-    const id = this.idSig();
-    if (!Number.isFinite(id)) return null;
+    const id = this.taskId();
     return this.store.tasks().find(t => t.id === id) ?? null;
   });
+
+  /** True until the first task load lands — avoids a "not found" flash on deep links. */
+  readonly loading = computed(() => this.store.tasks().length === 0);
 
   readonly project = computed<Project | null>(() => {
     const t = this.task();
@@ -72,6 +79,20 @@ export class TaskView {
 
   @ViewChild('bodyEditor') bodyEditor?: ElementRef<HTMLTextAreaElement>;
   @ViewChild('titleEditor') titleEditor?: ElementRef<HTMLInputElement>;
+  @ViewChild('box') box?: ElementRef<HTMLElement>;
+
+  private previouslyFocused: HTMLElement | null = null;
+
+  ngAfterViewInit(): void {
+    // Take focus so Esc / `e` land here, and hand it back to the card (or
+    // whatever opened us) on close.
+    this.previouslyFocused = document.activeElement as HTMLElement | null;
+    setTimeout(() => this.box?.nativeElement.focus(), 0);
+  }
+
+  ngOnDestroy(): void {
+    this.previouslyFocused?.focus?.();
+  }
 
   constructor() {
     // Keep tagsDraft synced with task when not actively editing (no tags edit
@@ -163,6 +184,18 @@ export class TaskView {
     await this.store.patch(t.id, { project_id });
   }
 
+  async setModel(value: string): Promise<void> {
+    const t = this.task();
+    if (!t || (value || null) === (t.model ?? null)) return;
+    await this.store.patch(t.id, { model: value || null });
+  }
+
+  async setEffort(value: string): Promise<void> {
+    const t = this.task();
+    if (!t || (value || null) === (t.effort ?? null)) return;
+    await this.store.patch(t.id, { effort: value || null });
+  }
+
   async commitTags(): Promise<void> {
     const t = this.task();
     if (!t) return;
@@ -180,9 +213,9 @@ export class TaskView {
   async remove(): Promise<void> {
     const t = this.task();
     if (!t) return;
-    if (!confirm(`Delete "${t.title}"?`)) return;
+    if (!confirmDelete(t)) return;
     await this.store.remove(t.id);
-    this.router.navigate(['/board']);
+    this.nav.close();
   }
 
   prioLabel(p: number): string {
@@ -198,7 +231,7 @@ export class TaskView {
       event.preventDefault();
       this.startBodyEdit();
     } else if (event.key === 'Escape') {
-      this.router.navigate(['/board']);
+      this.nav.close();
     }
   }
 }

@@ -39,7 +39,7 @@ test-backend:
 	cd backend && go test -coverprofile=coverage.out ./... && go tool cover -func=coverage.out
 
 test-frontend:
-	cd frontend && npx ng test --watch=false --code-coverage
+	cd frontend && npx ng test --watch=false --coverage --coverage-reporters=text-summary
 
 lint: lint-frontend lint-backend
 

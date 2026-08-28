@@ -1,5 +1,5 @@
 <header class="app-header">
-  <h1>Kanban</h1>
+  <h1>Kanban <span class="app-version">v{{ version }}</span></h1>
   <nav class="views" aria-label="View">
     <a routerLink="/board" routerLinkActive="active">Board</a>
     <a routerLink="/list" routerLinkActive="active">List</a>
@@ -30,25 +30,83 @@
         [title]="sidebarOpen() ? 'Collapse' : 'Expand'"
       >{{ sidebarOpen() ? '<<<' : '>>>' }}</button>
     </div>
-    <ul [attr.aria-hidden]="!sidebarOpen()">
+    <ul [attr.aria-hidden]="!sidebarOpen()" role="list">
+      <li class="all">
+        <button
+          type="button"
+          class="row"
+          [class.selected]="filter().size === 0"
+          [attr.aria-pressed]="filter().size === 0"
+          (click)="selectAll()"
+        >
+          <span class="name">All</span>
+          <span class="count">{{ tasks().length }}</span>
+        </button>
+      </li>
       @for (p of projects(); track p.id) {
         <li>
-          <span class="dot" [style.background]="p.color"></span>
-          <span class="name">{{ p.name }}</span>
-          <span class="count">{{ countFor(p.id) }}</span>
+          <button
+            type="button"
+            class="row"
+            [class.selected]="isSelected(p.id)"
+            [attr.aria-pressed]="isSelected(p.id)"
+            (click)="selectProject(p.id, $event)"
+            title="Click to select · Ctrl/⌘-click to add · Shift-click for a range"
+          >
+            <span class="dot" [style.background]="p.color"></span>
+            <span class="name">{{ p.name }}</span>
+            <span class="count">{{ countFor(p.id) }}</span>
+          </button>
         </li>
       } @empty {
         <li class="empty">no projects yet</li>
       }
       <li class="inbox">
-        <span class="name">Inbox</span>
-        <span class="count">{{ countFor(null) }}</span>
+        <button
+          type="button"
+          class="row"
+          [class.selected]="isSelected(null)"
+          [attr.aria-pressed]="isSelected(null)"
+          (click)="selectProject(null, $event)"
+          title="Click to select · Ctrl/⌘-click to add · Shift-click for a range"
+        >
+          <span class="name">Inbox</span>
+          <span class="count">{{ countFor(null) }}</span>
+        </button>
       </li>
+    </ul>
+
+    <h2 class="section-head">Tags</h2>
+    <ul [attr.aria-hidden]="!sidebarOpen()" role="list" aria-label="Tags">
+      @for (t of tags(); track t.name) {
+        <li>
+          <button
+            type="button"
+            class="row tag"
+            [class.selected]="tagFilter() === t.name"
+            [attr.aria-pressed]="tagFilter() === t.name"
+            (click)="selectTag(t.name)"
+          >
+            <span class="name"><span class="hash">#</span>{{ t.name }}</span>
+            <span class="count">{{ t.count }}</span>
+          </button>
+        </li>
+      } @empty {
+        <li class="empty">no tags yet</li>
+      }
     </ul>
   </aside>
 
   <main class="app-main">
     <router-outlet />
+
+    <!-- Ticket modal: covers only this pane, so the header nav and the
+         project sidebar stay usable while a ticket is open. -->
+    @defer (when ticketId() !== null) {
+      @if (ticketId(); as id) {
+        <app-task-view [taskId]="id" />
+      }
+    }
   </main>
 </div>
 

@@ -19,6 +19,8 @@ type Task struct {
 	SortOrder   float64  `json:"sort_order"`
 	PlanSlug    *string  `json:"plan_slug,omitempty"`
 	GitBranch   *string  `json:"git_branch,omitempty"`
+	Model       *string  `json:"model,omitempty"`  // suggested Claude model, e.g. "fable", "sonnet"
+	Effort      *string  `json:"effort,omitempty"` // suggested reasoning effort: low … max
 	CreatedAt   string   `json:"created_at"`
 	UpdatedAt   string   `json:"updated_at"`
 	CompletedAt *string  `json:"completed_at"`
@@ -50,6 +52,10 @@ type PlanUpsert struct {
 	Tags           *[]string
 	GitBranch      *string
 	ClearGitBranch bool
+	Model          *string
+	ClearModel     bool
+	Effort         *string
+	ClearEffort    bool
 }
 
 // ProjectUpsert is the payload for PUT /api/agent/projects/:slug.
@@ -88,4 +94,8 @@ type TaskPatch struct {
 	Tags           *[]string
 	GitBranch      *string
 	ClearGitBranch bool
+	Model          *string
+	ClearModel     bool
+	Effort         *string
+	ClearEffort    bool
 }

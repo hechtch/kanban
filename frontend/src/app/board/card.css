@@ -87,7 +87,7 @@
   color: var(--muted);
 }
 
-.actor, .branch {
+.actor, .branch, .model {
   display: flex;
   align-items: center;
   gap: 0.3rem;
@@ -116,3 +116,9 @@
 }
 
 .actor.claude { color: var(--accent); }
+
+.model span {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.74rem;
+}
+.model-icon { width: 0.85rem; height: 0.85rem; flex-shrink: 0; }

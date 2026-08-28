@@ -1,11 +1,20 @@
+<div class="overlay" (click)="nav.close()">
+<div
+  class="dialog"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="ticket-title"
+  tabindex="-1"
+  #box
+  (click)="$event.stopPropagation()"
+>
 @if (task(); as t) {
   <article class="task-page">
     <nav class="crumbs">
-      <a routerLink="/board" class="back">← board</a>
-      <span class="sep">·</span>
       <span class="muted">task #{{ t.id }}</span>
       <span class="spacer"></span>
       <button type="button" class="danger ghost" (click)="remove()">Delete</button>
+      <button type="button" class="close" (click)="nav.close()" aria-label="Close" title="Close (Esc)">×</button>
     </nav>
 
     <header class="hd">
@@ -20,7 +29,7 @@
           (keydown.escape)="cancelTitle()"
         />
       } @else {
-        <h1 class="title" tabindex="0" (click)="startTitleEdit()" (keydown.enter)="startTitleEdit()">
+        <h1 id="ticket-title" class="title" tabindex="0" (click)="startTitleEdit()" (keydown.enter)="startTitleEdit()">
           {{ t.title }}
         </h1>
       }
@@ -72,6 +81,33 @@
             <option value="">— inbox —</option>
             @for (p of store.projects(); track p.id) {
               <option [ngValue]="p.id">{{ p.name }}</option>
+            }
+          </select>
+        </dd>
+      </div>
+
+      <div class="field">
+        <dt>Model</dt>
+        <dd>
+          <select [ngModel]="t.model ?? ''" (ngModelChange)="setModel($event)" title="Suggested Claude model for an agent picking this up">
+            <option value="">— any —</option>
+            @for (m of models; track m) {
+              <option [value]="m">{{ m }}</option>
+            }
+            @if (t.model && !models.includes(t.model)) {
+              <option [value]="t.model">{{ t.model }}</option>
+            }
+          </select>
+        </dd>
+      </div>
+
+      <div class="field">
+        <dt>Effort</dt>
+        <dd>
+          <select [ngModel]="t.effort ?? ''" (ngModelChange)="setEffort($event)" title="Suggested reasoning effort">
+            <option value="">— default —</option>
+            @for (e of efforts; track e) {
+              <option [value]="e">{{ e }}</option>
             }
           </select>
         </dd>
@@ -145,7 +181,13 @@ Write notes, repro steps, links — anything.
   </article>
 } @else {
   <div class="not-found">
-    <p>Task not found.</p>
-    <a routerLink="/board">← back to board</a>
+    @if (loading()) {
+      <p>Loading…</p>
+    } @else {
+      <p>Task #{{ taskId() }} not found.</p>
+      <button type="button" class="ghost" (click)="nav.close()">← back to board</button>
+    }
   </div>
 }
+</div>
+</div>

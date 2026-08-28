@@ -1,20 +1,43 @@
 import { Component, HostListener, computed, inject, signal } from '@angular/core';
-import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { map } from 'rxjs';
 
 import { Task } from './models';
 import { TaskStore } from './task-store';
 import { Capture } from './task-modal/capture';
 import { DashboardNav } from './shared/dashboard-nav';
+import { TICKET_PARAM, TicketNav } from './shared/ticket-nav';
+import { TaskView } from './task-view/task-view';
+import pkg from '../../package.json';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, Capture, DashboardNav],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, Capture, DashboardNav, TaskView],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
 export class App {
+  /** Built-from version, shown beside the app name so a glance at the header
+   *  tells whether the deployed bundle matches the source's package.json. */
+  readonly version = pkg.version;
+
   private store = inject(TaskStore);
   private router = inject(Router);
+  private route = inject(ActivatedRoute);
+  private ticketNav = inject(TicketNav);
+
+  /** Ticket open over the current view (`?task=<id>`), or null. */
+  readonly ticketId = toSignal(
+    this.route.queryParamMap.pipe(
+      map(p => {
+        const raw = p.get(TICKET_PARAM);
+        const id = Number(raw);
+        return raw && Number.isInteger(id) ? id : null;
+      }),
+    ),
+    { initialValue: null },
+  );
 
   // <base href> like "/apps/kanban/" means we're hosted inside the dashboard
   // reverse proxy; show a back-link to "/".
@@ -22,6 +45,12 @@ export class App {
   readonly inDashboard = this.baseHref.startsWith('/apps/');
 
   readonly projects = this.store.projects;
+  readonly tasks = this.store.tasks;
+  readonly filter = this.store.projectFilter;
+  /** Last project row clicked without Shift — the start of a Shift-click range. */
+  private rangeAnchor: number | null | undefined = undefined;
+  readonly tagFilter = this.store.tagFilter;
+  readonly tags = this.store.tagCounts;
   readonly captureOpen = signal(false);
   readonly navMenuOpen = signal(false);
   readonly sidebarOpen = signal(this.loadSidebarOpen());
@@ -57,12 +86,73 @@ export class App {
     return this.countByProject().get(id) ?? 0;
   }
 
+  isSelected(id: number | null): boolean {
+    return this.filter().has(id);
+  }
+
+  /**
+   * Sidebar click on a project (or Inbox).
+   *  - plain: select just this row; clicking the sole selected row clears
+   *  - Ctrl/⌘: toggle this row in the selection
+   *  - Shift: select the range from the last plain/Ctrl-clicked row to this
+   *    one, in sidebar order (Inbox last); Ctrl+Shift adds the range
+   */
+  selectProject(id: number | null, event?: MouseEvent): void {
+    const multi = !!(event?.ctrlKey || event?.metaKey);
+    if (event?.shiftKey && this.rangeAnchor !== undefined) {
+      const order = this.sidebarOrder();
+      const a = order.indexOf(this.rangeAnchor);
+      const b = order.indexOf(id);
+      if (a >= 0 && b >= 0) {
+        const range = order.slice(Math.min(a, b), Math.max(a, b) + 1);
+        this.store.setProjectFilter(multi ? [...this.filter(), ...range] : range);
+        this.returnToBoard();
+        return;
+      }
+    }
+    if (multi) this.store.toggleProjectInFilter(id);
+    else this.store.toggleProjectFilter(id);
+    this.rangeAnchor = id;
+    this.returnToBoard();
+  }
+
+  selectAll(): void {
+    this.store.setProjectFilter(undefined);
+    this.rangeAnchor = undefined;
+    this.returnToBoard();
+  }
+
+  /** Rows as they appear in the sidebar: projects, then Inbox. */
+  private sidebarOrder(): (number | null)[] {
+    return [...this.projects().map(p => p.id), null];
+  }
+
+  /** Tag rows work the same way: click to select, click again to clear. */
+  selectTag(tag: string): void {
+    this.store.toggleTagFilter(tag);
+    this.returnToBoard();
+  }
+
+  /**
+   * Picking a sidebar row means "show me that project". If a ticket is open,
+   * close it so the (now filtered) board behind it is what they see; if
+   * they're on Search — where the sidebar filter doesn't apply — jump to
+   * the Board.
+   */
+  private returnToBoard(): void {
+    if (this.router.url.startsWith('/search')) {
+      this.router.navigateByUrl('/board');
+    } else if (this.ticketId() !== null) {
+      this.ticketNav.close();
+    }
+  }
+
   openCapture(): void { this.captureOpen.set(true); }
   closeCapture(): void { this.captureOpen.set(false); }
 
   async onCaptureCreate(draft: Partial<Task>): Promise<void> {
     this.captureOpen.set(false);
-    await this.store.create(draft);
+    await this.store.create(this.store.withFilterDefaults(draft));
   }
 
   // ⌘N / Ctrl+N opens quick capture from anywhere — but not when the user is

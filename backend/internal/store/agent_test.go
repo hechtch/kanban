@@ -299,13 +299,13 @@ func TestBlockedStatusAcceptedAndWaitingRejected(t *testing.T) {
 
 func TestSlugify(t *testing.T) {
 	cases := map[string]string{
-		"Kanban Work Tracker":     "kanban-work-tracker",
-		"Phase 2 — Refactor!":     "phase-2-refactor",
-		"  weird   spaces  ":      "weird-spaces",
-		"already-kebab":           "already-kebab",
-		"UPPERCASE":               "uppercase",
-		"---":                     "",
-		"a.b.c":                   "a-b-c",
+		"Kanban Work Tracker": "kanban-work-tracker",
+		"Phase 2 — Refactor!": "phase-2-refactor",
+		"  weird   spaces  ":  "weird-spaces",
+		"already-kebab":       "already-kebab",
+		"UPPERCASE":           "uppercase",
+		"---":                 "",
+		"a.b.c":               "a-b-c",
 	}
 	for in, want := range cases {
 		if got := Slugify(in); got != want {
@@ -446,5 +446,63 @@ func TestListPlanTasksFiltersOutHumanTasks(t *testing.T) {
 	}
 	if len(plans) != 1 || plans[0].PlanSlug == nil || *plans[0].PlanSlug != "agent-api" {
 		t.Fatalf("expected only the agent-api plan, got %+v", plans)
+	}
+}
+
+func TestModelEffortRoundTrip(t *testing.T) {
+	s := newTestStore(t)
+	model, effort := " Fable ", "XHIGH"
+	task, _, err := s.UpsertPlan("audit", PlanUpsert{Model: &model, Effort: &effort})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Normalised: trimmed + lowercased.
+	if task.Model == nil || *task.Model != "fable" {
+		t.Fatalf("model not set on create: %+v", task.Model)
+	}
+	if task.Effort == nil || *task.Effort != "xhigh" {
+		t.Fatalf("effort not set on create: %+v", task.Effort)
+	}
+
+	// Patch path through the upsert.
+	sonnet, high := "sonnet", "high"
+	task2, _, err := s.UpsertPlan("audit", PlanUpsert{Model: &sonnet, Effort: &high})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if *task2.Model != "sonnet" || *task2.Effort != "high" {
+		t.Fatalf("not updated: %v / %v", *task2.Model, *task2.Effort)
+	}
+
+	// Bad effort is rejected, and nothing else changes.
+	bogus := "ultra"
+	if _, _, err := s.UpsertPlan("audit", PlanUpsert{Effort: &bogus}); !errors.Is(err, ErrValidation) {
+		t.Fatalf("expected ErrValidation for bad effort, got %v", err)
+	}
+	if _, err := s.CreateTask(Task{Title: "x", Effort: &bogus}); err == nil {
+		t.Fatal("expected invalid effort to be rejected on create")
+	}
+
+	// Clear both.
+	task3, err := s.UpdateTask(task2.ID, TaskPatch{ClearModel: true, ClearEffort: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if task3.Model != nil || task3.Effort != nil {
+		t.Fatalf("not cleared: %v / %v", task3.Model, task3.Effort)
+	}
+
+	// Empty string behaves like clear.
+	empty := ""
+	task4, _, err := s.UpsertPlan("audit", PlanUpsert{Model: &sonnet})
+	if err != nil {
+		t.Fatal(err)
+	}
+	task4, err = s.UpdateTask(task4.ID, TaskPatch{Model: &empty})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if task4.Model != nil {
+		t.Fatalf("empty model should clear, got %v", *task4.Model)
 	}
 }

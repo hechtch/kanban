@@ -65,6 +65,9 @@ func storeErr(err error) error {
 	if errors.Is(err, store.ErrNotFound) {
 		return huma.Error404NotFound(err.Error())
 	}
+	if errors.Is(err, store.ErrValidation) {
+		return huma.Error422UnprocessableEntity(err.Error())
+	}
 	return huma.Error500InternalServerError("internal error", err)
 }
 

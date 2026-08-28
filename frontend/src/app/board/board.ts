@@ -8,7 +8,6 @@ import {
   QueryList,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
 import {
   CdkDrag,
   CdkDragDrop,
@@ -20,6 +19,9 @@ import { COLUMN_STATUSES, Project, Status, STATUS_LABEL, Task } from '../models'
 import { TaskStore } from '../task-store';
 import { Card } from './card';
 import { TaskModal } from '../task-modal/task-modal';
+import { FilterBar } from '../shared/filter-bar';
+import { TicketNav } from '../shared/ticket-nav';
+import { confirmDelete } from '../shared/confirm-delete';
 
 interface MenuState {
   task: Task;
@@ -37,13 +39,14 @@ interface MenuState {
     FormsModule,
     Card,
     TaskModal,
+    FilterBar,
   ],
   templateUrl: './board.html',
   styleUrl: './board.css',
 })
 export class Board {
   private store = inject(TaskStore);
-  private router = inject(Router);
+  private ticketNav = inject(TicketNav);
 
   readonly columns: Status[] = COLUMN_STATUSES;
 
@@ -51,6 +54,7 @@ export class Board {
     return STATUS_LABEL[s];
   }
   readonly projectsSig = this.store.projects;
+  readonly filterProject = this.store.soleFilterProject;
 
   readonly menu = signal<MenuState | null>(null);
   readonly creating = signal<{ status: Status } | null>(null);
@@ -108,7 +112,10 @@ export class Board {
     await this.store.patch(task.id, { priority: priority as Task['priority'] });
   }
 
-  async remove(task: Task): Promise<void> { await this.store.remove(task.id); }
+  async remove(task: Task): Promise<void> {
+    if (!confirmDelete(task)) return;
+    await this.store.remove(task.id);
+  }
 
   // ─── inline quick-add ─────────────────────────────────────────────
   async submitQuickAdd(col: Status): Promise<void> {
@@ -116,7 +123,7 @@ export class Board {
     const title = (draft[col] ?? '').trim();
     if (!title) return;
     this.quickAdd.set({ ...draft, [col]: '' });
-    await this.store.create({ title, status: col });
+    await this.store.create(this.store.withFilterDefaults({ title, status: col }));
   }
 
   quickAddInput(col: Status, value: string): void {
@@ -129,12 +136,12 @@ export class Board {
   }
 
   openEdit(task: Task): void {
-    this.router.navigate(['/task', task.id]);
+    this.ticketNav.open(task.id);
   }
 
   async onModalSave(patch: Partial<Task>): Promise<void> {
     if (this.creating()) {
-      await this.store.create(patch);
+      await this.store.create(this.store.withFilterDefaults(patch));
       this.creating.set(null);
     }
   }

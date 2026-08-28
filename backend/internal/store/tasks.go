@@ -12,6 +12,43 @@ var validStatus = map[string]bool{
 	"awaiting_merge": true, "done": true, "backlog": true,
 }
 
+// validEffort mirrors Claude Code's reasoning-effort tiers. Model names are
+// deliberately NOT enumerated — they churn faster than this code does.
+var validEffort = map[string]bool{
+	"low": true, "medium": true, "high": true, "xhigh": true, "max": true,
+}
+
+// normalizeModel trims and lowercases a suggested model; empty → nil.
+func normalizeModel(m *string) (*string, error) {
+	if m == nil {
+		return nil, nil
+	}
+	v := strings.ToLower(strings.TrimSpace(*m))
+	if v == "" {
+		return nil, nil
+	}
+	if len(v) > 40 {
+		return nil, fmt.Errorf("%w: model too long (max 40 chars)", ErrValidation)
+	}
+	return &v, nil
+}
+
+// normalizeEffort trims and lowercases a suggested effort and checks it
+// against validEffort; empty → nil.
+func normalizeEffort(e *string) (*string, error) {
+	if e == nil {
+		return nil, nil
+	}
+	v := strings.ToLower(strings.TrimSpace(*e))
+	if v == "" {
+		return nil, nil
+	}
+	if !validEffort[v] {
+		return nil, fmt.Errorf("%w: invalid effort %q (low, medium, high, xhigh, max)", ErrValidation, v)
+	}
+	return &v, nil
+}
+
 func (s *Store) ListTasks(f TaskFilter) ([]Task, error) {
 	where := []string{}
 	args := []any{}
@@ -33,7 +70,7 @@ func (s *Store) ListTasks(f TaskFilter) ([]Task, error) {
 	}
 
 	q := `SELECT id, title, body, status, priority, due_text, project_id,
-	       sort_order, plan_slug, git_branch, created_at, updated_at, completed_at
+	       sort_order, plan_slug, git_branch, model, effort, created_at, updated_at, completed_at
 	       FROM task`
 	if len(where) > 0 {
 		q += " WHERE " + strings.Join(where, " AND ")
@@ -76,7 +113,7 @@ func (s *Store) ListTasks(f TaskFilter) ([]Task, error) {
 func (s *Store) GetTask(id int64) (Task, error) {
 	row := s.db.QueryRow(
 		`SELECT id, title, body, status, priority, due_text, project_id,
-		        sort_order, plan_slug, git_branch, created_at, updated_at, completed_at
+		        sort_order, plan_slug, git_branch, model, effort, created_at, updated_at, completed_at
 		   FROM task WHERE id = ?`, id,
 	)
 	t, err := scanTask(row)
@@ -99,16 +136,24 @@ func (s *Store) GetTask(id int64) (Task, error) {
 
 func (s *Store) CreateTask(t Task) (Task, error) {
 	if strings.TrimSpace(t.Title) == "" {
-		return Task{}, fmt.Errorf("title required")
+		return Task{}, fmt.Errorf("%w: title required", ErrValidation)
 	}
 	if t.Status == "" {
 		t.Status = "todo"
 	}
 	if !validStatus[t.Status] {
-		return Task{}, fmt.Errorf("invalid status %q", t.Status)
+		return Task{}, fmt.Errorf("%w: invalid status %q", ErrValidation, t.Status)
 	}
 	if t.Priority < 0 || t.Priority > 3 {
-		return Task{}, fmt.Errorf("priority must be 0-3")
+		return Task{}, fmt.Errorf("%w: priority must be 0-3", ErrValidation)
+	}
+	model, err := normalizeModel(t.Model)
+	if err != nil {
+		return Task{}, err
+	}
+	effort, err := normalizeEffort(t.Effort)
+	if err != nil {
+		return Task{}, err
 	}
 
 	tx, err := s.db.Begin()
@@ -118,10 +163,10 @@ func (s *Store) CreateTask(t Task) (Task, error) {
 	defer func() { _ = tx.Rollback() }()
 
 	res, err := tx.Exec(
-		`INSERT INTO task (title, body, status, priority, due_text, project_id, sort_order, git_branch)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO task (title, body, status, priority, due_text, project_id, sort_order, git_branch, model, effort)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		t.Title, t.Body, t.Status, t.Priority, t.DueText, t.ProjectID, t.SortOrder,
-		nullStr(t.GitBranch),
+		nullStr(t.GitBranch), nullStr(model), nullStr(effort),
 	)
 	if err != nil {
 		return Task{}, err
@@ -158,7 +203,7 @@ func (s *Store) UpdateTask(id int64, patch TaskPatch) (Task, error) {
 	}
 	if patch.Status != nil {
 		if !validStatus[*patch.Status] {
-			return Task{}, fmt.Errorf("invalid status %q", *patch.Status)
+			return Task{}, fmt.Errorf("%w: invalid status %q", ErrValidation, *patch.Status)
 		}
 		sets = append(sets, "status = ?")
 		args = append(args, *patch.Status)
@@ -170,7 +215,7 @@ func (s *Store) UpdateTask(id int64, patch TaskPatch) (Task, error) {
 	}
 	if patch.Priority != nil {
 		if *patch.Priority < 0 || *patch.Priority > 3 {
-			return Task{}, fmt.Errorf("priority must be 0-3")
+			return Task{}, fmt.Errorf("%w: priority must be 0-3", ErrValidation)
 		}
 		sets = append(sets, "priority = ?")
 		args = append(args, *patch.Priority)
@@ -194,6 +239,26 @@ func (s *Store) UpdateTask(id int64, patch TaskPatch) (Task, error) {
 	} else if patch.GitBranch != nil {
 		sets = append(sets, "git_branch = ?")
 		args = append(args, *patch.GitBranch)
+	}
+	if patch.ClearModel {
+		sets = append(sets, "model = NULL")
+	} else if patch.Model != nil {
+		model, err := normalizeModel(patch.Model)
+		if err != nil {
+			return Task{}, err
+		}
+		sets = append(sets, "model = ?")
+		args = append(args, nullStr(model))
+	}
+	if patch.ClearEffort {
+		sets = append(sets, "effort = NULL")
+	} else if patch.Effort != nil {
+		effort, err := normalizeEffort(patch.Effort)
+		if err != nil {
+			return Task{}, err
+		}
+		sets = append(sets, "effort = ?")
+		args = append(args, nullStr(effort))
 	}
 
 	if len(sets) > 0 {
@@ -241,9 +306,9 @@ type rowScanner interface {
 func scanTask(r rowScanner) (Task, error) {
 	var t Task
 	var projID sql.NullInt64
-	var planSlug, gitBranch, completedAt sql.NullString
+	var planSlug, gitBranch, model, effort, completedAt sql.NullString
 	err := r.Scan(&t.ID, &t.Title, &t.Body, &t.Status, &t.Priority, &t.DueText,
-		&projID, &t.SortOrder, &planSlug, &gitBranch,
+		&projID, &t.SortOrder, &planSlug, &gitBranch, &model, &effort,
 		&t.CreatedAt, &t.UpdatedAt, &completedAt)
 	if err != nil {
 		return Task{}, err
@@ -256,6 +321,12 @@ func scanTask(r rowScanner) (Task, error) {
 	}
 	if gitBranch.Valid {
 		t.GitBranch = &gitBranch.String
+	}
+	if model.Valid {
+		t.Model = &model.String
+	}
+	if effort.Valid {
+		t.Effort = &effort.String
 	}
 	if completedAt.Valid {
 		t.CompletedAt = &completedAt.String

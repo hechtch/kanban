@@ -9,6 +9,10 @@ import (
 
 var ErrNotFound = errors.New("not found")
 
+// ErrValidation marks a caller error (bad status, effort, priority …) so the
+// API layer can answer 422 instead of 500. Wrap with fmt.Errorf("%w: …").
+var ErrValidation = errors.New("validation")
+
 func (s *Store) ListProjects() ([]Project, error) {
 	rows, err := s.db.Query(`SELECT id, COALESCE(slug,''), name, color, sort_order FROM project ORDER BY sort_order, id`)
 	if err != nil {

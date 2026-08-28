@@ -3,6 +3,8 @@ import { FormsModule } from '@angular/forms';
 
 import { COLUMN_STATUSES, Project, Status, STATUS_LABEL, Task } from '../models';
 import { TaskStore } from '../task-store';
+import { FilterBar } from '../shared/filter-bar';
+import { confirmDelete } from '../shared/confirm-delete';
 
 interface Group {
   project: Project | null;
@@ -22,7 +24,7 @@ interface Editing {
 @Component({
   selector: 'app-list',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, FilterBar],
   templateUrl: './list.html',
   styleUrl: './list.css',
 })
@@ -38,18 +40,26 @@ export class List {
   readonly editing = signal<Editing | null>(null);
 
   groups = computed<Group[]>(() => {
+    const filter = this.store.projectFilter();
+    const tagFilter = this.store.tagFilter();
     const byProj = new Map<number | null, Task[]>();
-    for (const t of this.store.tasks()) {
+    for (const t of this.store.visibleTasks()) {
       const key = t.project_id;
       if (!byProj.has(key)) byProj.set(key, []);
       byProj.get(key)!.push(t);
     }
     const out: Group[] = [];
     for (const p of this.store.projects()) {
+      // Unfiltered: every project gets a section, even an empty one.
+      // Project filter: only the selected project's section.
+      // Tag filter: only projects that actually have a matching task —
+      // a tag spans projects, so most sections would otherwise be empty.
+      if (filter.size && !filter.has(p.id)) continue;
+      if (tagFilter !== undefined && !byProj.has(p.id)) continue;
       out.push({ project: p, tasks: (byProj.get(p.id) ?? []).slice().sort(sortKey) });
     }
-    if (byProj.has(null)) {
-      out.push({ project: null, tasks: byProj.get(null)!.slice().sort(sortKey) });
+    if (filter.has(null) || (!filter.size && byProj.has(null))) {
+      out.push({ project: null, tasks: (byProj.get(null) ?? []).slice().sort(sortKey) });
     }
     return out;
   });
@@ -91,6 +101,7 @@ export class List {
   }
 
   async deleteTask(task: Task): Promise<void> {
+    if (!confirmDelete(task)) return;
     await this.store.remove(task.id);
     if (this.editing()?.taskId === task.id) this.editing.set(null);
   }

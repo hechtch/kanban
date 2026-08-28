@@ -95,7 +95,7 @@ func (s *Store) ListPlanTasks(filter ...any) ([]Task, error) {
 	}
 
 	q := `SELECT id, title, body, status, priority, due_text, project_id,
-	             sort_order, plan_slug, git_branch,
+	             sort_order, plan_slug, git_branch, model, effort,
 	             created_at, updated_at, completed_at
 	        FROM task WHERE plan_slug IS NOT NULL`
 	args := []any{}
@@ -149,7 +149,7 @@ func (s *Store) ListPlanTasks(filter ...any) ([]Task, error) {
 func (s *Store) GetTaskByPlanSlug(slug string) (Task, error) {
 	row := s.db.QueryRow(
 		`SELECT id, title, body, status, priority, due_text, project_id,
-		        sort_order, plan_slug, git_branch,
+		        sort_order, plan_slug, git_branch, model, effort,
 		        created_at, updated_at, completed_at
 		   FROM task WHERE plan_slug = ?`, slug,
 	)
@@ -190,7 +190,7 @@ func (s *Store) UpsertPlan(slug string, p PlanUpsert) (Task, bool, error) {
 		} else {
 			proj, err := s.GetProjectBySlug(trimmed)
 			if errors.Is(err, ErrNotFound) {
-				return Task{}, false, fmt.Errorf("unknown project_slug %q", trimmed)
+				return Task{}, false, fmt.Errorf("%w: unknown project_slug %q", ErrValidation, trimmed)
 			}
 			if err != nil {
 				return Task{}, false, err
@@ -214,6 +214,10 @@ func (s *Store) UpsertPlan(slug string, p PlanUpsert) (Task, bool, error) {
 			Tags:           p.Tags,
 			GitBranch:      p.GitBranch,
 			ClearGitBranch: p.ClearGitBranch,
+			Model:          p.Model,
+			ClearModel:     p.ClearModel,
+			Effort:         p.Effort,
+			ClearEffort:    p.ClearEffort,
 		}
 		updated, err := s.UpdateTask(existing.ID, patch)
 		return updated, false, err
@@ -251,6 +255,17 @@ func (s *Store) UpsertPlan(slug string, p PlanUpsert) (Task, bool, error) {
 	if p.GitBranch != nil && !p.ClearGitBranch {
 		gitBranch = p.GitBranch
 	}
+	var model, effort *string
+	if p.Model != nil && !p.ClearModel {
+		if model, err = normalizeModel(p.Model); err != nil {
+			return Task{}, false, err
+		}
+	}
+	if p.Effort != nil && !p.ClearEffort {
+		if effort, err = normalizeEffort(p.Effort); err != nil {
+			return Task{}, false, err
+		}
+	}
 
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -259,9 +274,9 @@ func (s *Store) UpsertPlan(slug string, p PlanUpsert) (Task, bool, error) {
 	defer func() { _ = tx.Rollback() }()
 
 	res, err := tx.Exec(
-		`INSERT INTO task (title, body, status, priority, due_text, project_id, sort_order, plan_slug, git_branch)
-		 VALUES (?, ?, 'todo', ?, ?, ?, 0, ?, ?)`,
-		title, body, priority, due, projID, slug, nullStr(gitBranch),
+		`INSERT INTO task (title, body, status, priority, due_text, project_id, sort_order, plan_slug, git_branch, model, effort)
+		 VALUES (?, ?, 'todo', ?, ?, ?, 0, ?, ?, ?, ?)`,
+		title, body, priority, due, projID, slug, nullStr(gitBranch), nullStr(model), nullStr(effort),
 	)
 	if err != nil {
 		return Task{}, false, err
@@ -292,7 +307,7 @@ func (s *Store) UpsertPlan(slug string, p PlanUpsert) (Task, bool, error) {
 // Returns ErrNotFound if no task with that slug exists.
 func (s *Store) SetPlanStatus(slug, status, note string) (Task, error) {
 	if !validStatus[status] {
-		return Task{}, fmt.Errorf("invalid status %q", status)
+		return Task{}, fmt.Errorf("%w: invalid status %q", ErrValidation, status)
 	}
 	existing, err := s.GetTaskByPlanSlug(slug)
 	if err != nil {

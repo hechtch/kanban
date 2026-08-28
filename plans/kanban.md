@@ -157,6 +157,18 @@ priority from `1–4`, and inline edits all hit it.
       but didn't open a real browser this session)*
 - [ ] Tag `v0.1.0` and move this file to `plans/done/kanban.md`
       *(user action — release tag is yours)*
+- [x] Sidebar project filter: clicking a project / Inbox narrows Board
+      and List to it; persisted in localStorage; filter chip above the
+      views; new tasks default into the selected project
+- [x] Sidebar tag filter: tags in use listed with counts; a tag spans
+      projects and ANDs with the project filter; new tasks inherit the
+      selected tag
+- [x] Ticket view is a big modal over the main pane (`?task=<id>`);
+      `/task/<id>` redirects; sidebar/header stay usable behind it
+- [x] Sidebar multi-select (Ctrl/⌘-click toggle, Shift-click range);
+      sidebar click on Search jumps to the Board
+- [x] Per-task `model` / `effort` hints for agents (card chip, ticket
+      selects, `/api/tasks` + agent upsert, `kanban-plans` skill updated)
 
 ## Open questions
 

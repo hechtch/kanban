@@ -1,3 +1,14 @@
+/* Keep the filter chip on the same 56rem column as the groups below. */
+app-filter-bar {
+  max-width: 56rem;
+  margin: 0 auto;
+  padding: 1.25rem 1.25rem 0;
+}
+
+app-filter-bar:not(:empty) + .list {
+  padding-top: 0.75rem;
+}
+
 .list {
   padding: 1.25rem;
   display: flex;

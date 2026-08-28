@@ -1,5 +1,5 @@
 import { Component, EventEmitter, HostBinding, HostListener, Input, Output, inject } from '@angular/core';
-import { Router } from '@angular/router';
+import { TicketNav } from '../shared/ticket-nav';
 
 import { Project, Task } from '../models';
 
@@ -54,6 +54,18 @@ import { Project, Task } from '../models';
       </div>
     }
 
+    @if (task.model || task.effort) {
+      <div class="model" title="suggested model / effort">
+        <svg class="model-icon" viewBox="0 0 16 16" aria-hidden="true">
+          <rect x="4" y="4" width="8" height="8" rx="1.5" fill="none"
+                stroke="currentColor" stroke-width="1.3" />
+          <path d="M6 1.5V4 M10 1.5V4 M6 12v2.5 M10 12v2.5 M1.5 6H4 M1.5 10H4 M12 6h2.5 M12 10h2.5"
+                stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+        </svg>
+        <span>{{ modelLabel }}</span>
+      </div>
+    }
+
     <div class="actor" [class.claude]="isClaude"
          [attr.title]="isClaude ? 'Claude-owned plan' : 'User-entered task'">
       @if (isClaude) {
@@ -77,7 +89,7 @@ import { Project, Task } from '../models';
   styleUrl: './card.css',
 })
 export class Card {
-  private router = inject(Router);
+  private ticketNav = inject(TicketNav);
 
   @Input({ required: true }) task!: Task;
   @Input() project: Project | null = null;
@@ -93,7 +105,7 @@ export class Card {
   onClick(event: MouseEvent): void {
     const target = event.target as HTMLElement;
     if (target.closest('button, a, input, textarea, select')) return;
-    this.router.navigate(['/task', this.task.id]);
+    this.ticketNav.open(this.task.id);
   }
 
   prioLabel(): string {
@@ -102,5 +114,10 @@ export class Card {
 
   get isClaude(): boolean {
     return this.task.plan_slug != null;
+  }
+
+  /** `fable / xhigh`, or whichever half is set. */
+  get modelLabel(): string {
+    return [this.task.model, this.task.effort].filter(Boolean).join(' / ');
   }
 }

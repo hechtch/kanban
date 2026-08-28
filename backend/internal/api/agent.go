@@ -56,6 +56,8 @@ type upsertPlanInput struct {
 		ProjectSlug Optional[string] `json:"project_slug,omitempty" doc:"Project slug; null clears the project. Unknown slug → 422."`
 		Tags        *[]string        `json:"tags,omitempty"`
 		GitBranch   Optional[string] `json:"git_branch,omitempty"`
+		Model       Optional[string] `json:"model,omitempty" doc:"Suggested Claude model for whoever picks this up (fable / opus / sonnet / haiku); null clears"`
+		Effort      Optional[string] `json:"effort,omitempty" doc:"Suggested reasoning effort (low / medium / high / xhigh / max); null clears"`
 	}
 }
 
@@ -177,6 +179,22 @@ func registerAgentPlans(api huma.API, st *store.Store) {
 			} else {
 				v := in.Body.GitBranch.Value
 				patch.GitBranch = &v
+			}
+		}
+		if in.Body.Model.Present {
+			if in.Body.Model.Null {
+				patch.ClearModel = true
+			} else {
+				v := in.Body.Model.Value
+				patch.Model = &v
+			}
+		}
+		if in.Body.Effort.Present {
+			if in.Body.Effort.Null {
+				patch.ClearEffort = true
+			} else {
+				v := in.Body.Effort.Value
+				patch.Effort = &v
 			}
 		}
 		t, _, err := st.UpsertPlan(in.Slug, patch)

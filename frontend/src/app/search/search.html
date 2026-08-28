@@ -63,7 +63,7 @@
       <ul class="rows">
         @for (t of rows; track t.id) {
           <li class="row">
-            <a [routerLink]="['/task', t.id]" class="row-link">
+            <a [routerLink]="[]" [queryParams]="{ task: t.id }" queryParamsHandling="merge" class="row-link">
               @if (t.priority > 0) {
                 <span class="prio" [attr.data-prio]="t.priority">{{ '!'.repeat(t.priority) }}</span>
               }

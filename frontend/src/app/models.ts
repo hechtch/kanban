@@ -40,6 +40,10 @@ export interface Task {
   sort_order: number;
   plan_slug?: string | null;
   git_branch?: string | null;
+  /** Suggested Claude model for an agent picking this up (e.g. `fable`, `sonnet`). */
+  model?: string | null;
+  /** Suggested reasoning effort to pair with `model` (`low` … `max`). */
+  effort?: string | null;
   created_at: string;
   updated_at: string;
   completed_at: string | null;
@@ -60,3 +64,11 @@ export interface ParsedDraft {
   project_name: string;
   project_id: number | null;
 }
+
+/** Model shorthands offered in the ticket's Model select. Free-form on the
+ *  server — these are just the house set, most capable first. */
+export const MODEL_OPTIONS = ['fable', 'opus', 'sonnet', 'haiku'] as const;
+
+/** Effort tiers, matching Claude Code's reasoning-effort levels. Enforced
+ *  server-side. */
+export const EFFORT_OPTIONS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;

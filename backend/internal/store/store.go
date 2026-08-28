@@ -52,6 +52,8 @@ func (s *Store) migrate() error {
 			sort_order    REAL NOT NULL DEFAULT 0,
 			plan_slug     TEXT,
 			git_branch    TEXT,
+			model         TEXT,
+			effort        TEXT,
 			created_at    TEXT NOT NULL DEFAULT (datetime('now')),
 			updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
 			completed_at  TEXT
@@ -90,6 +92,12 @@ func (s *Store) migrate() error {
 		return err
 	}
 	if err := s.addColumnIfMissing("task", "git_branch", "TEXT"); err != nil {
+		return err
+	}
+	if err := s.addColumnIfMissing("task", "model", "TEXT"); err != nil {
+		return err
+	}
+	if err := s.addColumnIfMissing("task", "effort", "TEXT"); err != nil {
 		return err
 	}
 	if err := s.addColumnIfMissing("project", "slug", "TEXT"); err != nil {
@@ -153,6 +161,8 @@ func (s *Store) migrateTaskStatusConstraint() error {
 		sort_order    REAL NOT NULL DEFAULT 0,
 		plan_slug     TEXT,
 		git_branch    TEXT,
+		model         TEXT,
+		effort        TEXT,
 		created_at    TEXT NOT NULL DEFAULT (datetime('now')),
 		updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
 		completed_at  TEXT
@@ -161,10 +171,10 @@ func (s *Store) migrateTaskStatusConstraint() error {
 	}
 	if _, err := tx.Exec(`
 		INSERT INTO task_new (id, title, body, status, priority, due_text,
-		                     project_id, sort_order, plan_slug, git_branch,
+		                     project_id, sort_order, plan_slug, git_branch, model, effort,
 		                     created_at, updated_at, completed_at)
 		SELECT id, title, body, status, priority, due_text,
-		       project_id, sort_order, plan_slug, git_branch,
+		       project_id, sort_order, plan_slug, git_branch, model, effort,
 		       created_at, updated_at, completed_at
 		  FROM task`); err != nil {
 		return err
