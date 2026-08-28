@@ -12,10 +12,11 @@ const projects: Project[] = [
 
 function task(
   id: number, project_id: number | null, status: Task['status'] = 'todo', tags: string[] = [],
+  plan_slug: string | null = null,
 ): Task {
   return {
     id, title: `t${id}`, body: '', status, priority: 0, due_text: '', project_id,
-    sort_order: id, created_at: '', updated_at: '', completed_at: null, tags,
+    sort_order: id, created_at: '', updated_at: '', completed_at: null, tags, plan_slug,
   };
 }
 
@@ -231,5 +232,65 @@ describe('TaskStore archived projects', () => {
     await pending;
     http.expectOne(req => req.url.endsWith('/api/tasks')).flush(tasksWithArchived);
     expect(store.projects().find(p => p.id === 1)?.tags).toEqual(['finance']);
+  });
+});
+
+describe('TaskStore assignee filter', () => {
+  let store: TaskStore;
+  let http: HttpTestingController;
+
+  // A task with a plan_slug was claimed through the agent API — that's
+  // what makes it Claude's, and it's the same signal the card chip uses.
+  const mixed: Task[] = [
+    task(10, 1, 'todo', []),
+    task(11, 1, 'doing', [], 'agent-api'),
+    task(12, null, 'todo', [], 'search'),
+  ];
+
+  beforeEach(() => {
+    localStorage.removeItem('kanban-project-filter');
+    localStorage.removeItem('kanban-tag-filter');
+    localStorage.removeItem('kanban-assignee-filter');
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    http = TestBed.inject(HttpTestingController);
+    store = TestBed.inject(TaskStore);
+    http.expectOne(req => req.url.endsWith('/api/projects')).flush(projects);
+    http.expectOne(req => req.url.endsWith('/api/tasks')).flush(mixed);
+  });
+
+  afterEach(() => {
+    http.verify();
+    localStorage.removeItem('kanban-assignee-filter');
+  });
+
+  it('counts plan-owned tasks as Claude and the rest as yours', () => {
+    expect(store.assigneeCounts()).toEqual({ me: 1, claude: 2 });
+  });
+
+  it('narrows to one assignee and back', () => {
+    store.setAssigneeFilter('claude');
+    expect(store.visibleTasks().map(t => t.id)).toEqual([11, 12]);
+    store.setAssigneeFilter('me');
+    expect(store.visibleTasks().map(t => t.id)).toEqual([10]);
+    store.toggleAssigneeFilter('me');
+    expect(store.assigneeFilter()).toBeUndefined();
+    expect(store.visibleTasks().length).toBe(3);
+  });
+
+  it('ANDs with the project filter', () => {
+    store.setProjectFilter([1]);
+    store.setAssigneeFilter('claude');
+    expect(store.visibleTasks().map(t => t.id)).toEqual([11]);
+    expect(store.hasFilter()).toBe(true);
+  });
+
+  it('persists across reloads and is cleared by clearFilters', () => {
+    store.setAssigneeFilter('claude');
+    expect(localStorage.getItem('kanban-assignee-filter')).toBe('claude');
+    store.clearFilters();
+    expect(store.assigneeFilter()).toBeUndefined();
+    expect(localStorage.getItem('kanban-assignee-filter')).toBeNull();
   });
 });

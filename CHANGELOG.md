@@ -39,6 +39,14 @@ All notable changes to this project will be documented here. Format follows
   silently, with no undo.
 
 ### Added
+- **Filter by assignee** — a new *Assignee* section in the sidebar
+  splits the board between **you** and **Claude**, with counts. Click
+  one and the Board and List show only that owner's work; it combines
+  with the project and tag filters and survives a reload. Ownership is
+  the same signal the card's actor chip already showed — a task
+  claimed through the agent API (it carries a `plan_slug`) is
+  Claude's, anything you entered yourself is yours — so the sidebar
+  and the cards can't disagree.
 - **Archive a finished project** — a project can be marked archived
   from the sidebar's new project editor (or by an agent, with
   `{"archived":true}` on the project upsert). It folds into an

@@ -2,7 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { Observable, firstValueFrom } from 'rxjs';
 
 import { ApiService } from './api.service';
-import { COLUMN_STATUSES, Project, Status, Task, TaskFilter } from './models';
+import { Assignee, assigneeOf, COLUMN_STATUSES, Project, Status, Task, TaskFilter } from './models';
 
 /**
  * One entry in the sidebar project filter: a project id, or `null` for
@@ -13,6 +13,7 @@ export type ProjectKey = number | null;
 
 const FILTER_KEY = 'kanban-project-filter';
 const TAG_FILTER_KEY = 'kanban-tag-filter';
+const ASSIGNEE_FILTER_KEY = 'kanban-assignee-filter';
 
 export interface TagCount {
   name: string;
@@ -27,6 +28,7 @@ export class TaskStore {
   private readonly _projects = signal<Project[]>([]);
   private readonly _projectFilter = signal<ReadonlySet<ProjectKey>>(loadFilter());
   private readonly _tagFilter = signal<string | undefined>(loadTagFilter());
+  private readonly _assigneeFilter = signal<Assignee | undefined>(loadAssigneeFilter());
 
   readonly tasks = this._tasks.asReadonly();
   readonly projects = this._projects.asReadonly();
@@ -121,8 +123,25 @@ export class TaskStore {
     return tag;
   });
 
+  /**
+   * The active assignee filter, or `undefined`. Unlike the tag filter this
+   * never auto-clears: both rows are always in the sidebar, so an empty
+   * result still has a visible way out.
+   */
+  readonly assigneeFilter = this._assigneeFilter.asReadonly();
+
+  /** How many tasks each assignee owns — same basis as `tagCounts`. */
+  readonly assigneeCounts = computed<Record<Assignee, number>>(() => {
+    const out: Record<Assignee, number> = { me: 0, claude: 0 };
+    for (const t of this.liveTasks()) out[assigneeOf(t)]++;
+    return out;
+  });
+
   readonly hasFilter = computed(
-    () => this.projectFilter().size > 0 || this.tagFilter() !== undefined,
+    () =>
+      this.projectFilter().size > 0 ||
+      this.tagFilter() !== undefined ||
+      this.assigneeFilter() !== undefined,
   );
 
   /**
@@ -134,9 +153,11 @@ export class TaskStore {
   readonly visibleTasks = computed(() => {
     const f = this.projectFilter();
     const tag = this.tagFilter();
+    const who = this.assigneeFilter();
     let out = this.liveTasks();
     if (f.size) out = out.filter(t => f.has(t.project_id));
     if (tag !== undefined) out = out.filter(t => t.tags.includes(tag));
+    if (who !== undefined) out = out.filter(t => assigneeOf(t) === who);
     return out;
   });
 
@@ -252,9 +273,22 @@ export class TaskStore {
     this.setTagFilter(this.tagFilter() === tag ? undefined : tag);
   }
 
+  setAssigneeFilter(who: Assignee | undefined): void {
+    this._assigneeFilter.set(who);
+    try {
+      if (who === undefined) localStorage.removeItem(ASSIGNEE_FILTER_KEY);
+      else localStorage.setItem(ASSIGNEE_FILTER_KEY, who);
+    } catch { /* ignore */ }
+  }
+
+  toggleAssigneeFilter(who: Assignee): void {
+    this.setAssigneeFilter(this.assigneeFilter() === who ? undefined : who);
+  }
+
   clearFilters(): void {
     this.setProjectFilter(undefined);
     this.setTagFilter(undefined);
+    this.setAssigneeFilter(undefined);
   }
 
   /**
@@ -361,6 +395,15 @@ function loadFilter(): ReadonlySet<ProjectKey> {
 function loadTagFilter(): string | undefined {
   try {
     return localStorage.getItem(TAG_FILTER_KEY) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function loadAssigneeFilter(): Assignee | undefined {
+  try {
+    const v = localStorage.getItem(ASSIGNEE_FILTER_KEY);
+    return v === 'me' || v === 'claude' ? v : undefined;
   } catch {
     return undefined;
   }

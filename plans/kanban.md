@@ -178,6 +178,8 @@ priority from `1–4`, and inline edits all hit it.
       carry `#tax`)
 - [x] Project editor in the sidebar (name, colour, default tags,
       archive, delete) — projects used to be API-only
+- [x] Assignee filter (you / Claude) in the sidebar, derived from
+      plan ownership rather than a stored field
 
 ## Open questions
 

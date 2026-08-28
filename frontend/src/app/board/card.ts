@@ -1,7 +1,7 @@
 import { Component, EventEmitter, HostBinding, HostListener, Input, Output, inject } from '@angular/core';
 import { TicketNav } from '../shared/ticket-nav';
 
-import { Project, Task } from '../models';
+import { assigneeOf, Project, Task } from '../models';
 
 @Component({
   selector: 'app-card',
@@ -113,7 +113,7 @@ export class Card {
   }
 
   get isClaude(): boolean {
-    return this.task.plan_slug != null;
+    return assigneeOf(this.task) === 'claude';
   }
 
   /** `fable / xhigh`, or whichever half is set. */

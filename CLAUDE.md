@@ -56,6 +56,12 @@ same bundle works in both modes. **Never hardcode `/api` or
   own set before writing. That's what makes dropping a tag from a
   project drop it from every task at once, with nothing to
   backfill — don't "fix" this by writing them onto task rows.
+- **Assignee is derived, not stored.** `models.ts:assigneeOf` maps
+  `plan_slug != null` → Claude, everything else → you. The card's
+  actor chip and the sidebar's assignee filter both call it, so
+  they can't drift. Don't add an `assignee` column — plan ownership
+  already carries this, and a second field would contradict the
+  chip the moment an agent claimed a plan.
 - **Archiving is a view concern, not a filter on the API.**
   `project.archived` hides a project's tasks in the frontend
   (`TaskStore.liveTasks`); every endpoint still returns them.

@@ -3,7 +3,7 @@ import { ActivatedRoute, Router, RouterLink, RouterLinkActive, RouterOutlet } fr
 import { toSignal } from '@angular/core/rxjs-interop';
 import { map } from 'rxjs';
 
-import { Project, Task } from './models';
+import { Assignee, ASSIGNEE_LABEL, ASSIGNEES, Project, Task } from './models';
 import { TaskStore } from './task-store';
 import { Capture } from './task-modal/capture';
 import { DashboardNav } from './shared/dashboard-nav';
@@ -57,6 +57,13 @@ export class App {
   private rangeAnchor: number | null | undefined = undefined;
   readonly tagFilter = this.store.tagFilter;
   readonly tags = this.store.tagCounts;
+  readonly assignees = ASSIGNEES;
+  readonly assigneeFilter = this.store.assigneeFilter;
+  readonly assigneeCounts = this.store.assigneeCounts;
+
+  assigneeLabel(who: Assignee): string {
+    return ASSIGNEE_LABEL[who];
+  }
   readonly captureOpen = signal(false);
   readonly navMenuOpen = signal(false);
   readonly sidebarOpen = signal(this.loadSidebarOpen());
@@ -171,6 +178,12 @@ export class App {
   /** Tag rows work the same way: click to select, click again to clear. */
   selectTag(tag: string): void {
     this.store.toggleTagFilter(tag);
+    this.returnToBoard();
+  }
+
+  /** Assignee is derived from plan ownership, so these two rows are fixed. */
+  selectAssignee(who: Assignee): void {
+    this.store.toggleAssigneeFilter(who);
     this.returnToBoard();
   }
 

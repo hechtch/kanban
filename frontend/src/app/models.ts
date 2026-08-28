@@ -78,3 +78,23 @@ export const MODEL_OPTIONS = ['fable', 'opus', 'sonnet', 'haiku'] as const;
 /** Effort tiers, matching Claude Code's reasoning-effort levels. Enforced
  *  server-side. */
 export const EFFORT_OPTIONS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+
+export type Assignee = 'me' | 'claude';
+
+/**
+ * Who owns a task. Derived, never stored: a task carrying a `plan_slug`
+ * was claimed through the agent API, and that IS what "Claude's" means
+ * here. The card's actor chip renders from this same call, so the sidebar
+ * filter and the chip can't drift apart.
+ */
+export function assigneeOf(task: Pick<Task, 'plan_slug'>): Assignee {
+  return task.plan_slug != null ? 'claude' : 'me';
+}
+
+/** Sidebar/pill wording. Matches the card chip, which addresses the reader. */
+export const ASSIGNEE_LABEL: Record<Assignee, string> = {
+  me: 'you',
+  claude: 'Claude',
+};
+
+export const ASSIGNEES: Assignee[] = ['me', 'claude'];

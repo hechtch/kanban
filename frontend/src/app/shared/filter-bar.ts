@@ -5,6 +5,7 @@
 
 import { Component, inject } from '@angular/core';
 
+import { Assignee, ASSIGNEE_LABEL } from '../models';
 import { TaskStore } from '../task-store';
 
 @Component({
@@ -54,7 +55,20 @@ import { TaskStore } from '../task-store';
           </span>
         }
 
-        @if (store.projectFilter().size + (store.tagFilter() !== undefined ? 1 : 0) > 1) {
+        @if (store.assigneeFilter(); as who) {
+          <span class="pill">
+            <span class="name">{{ label(who) }}</span>
+            <button
+              type="button"
+              class="clear"
+              (click)="store.setAssigneeFilter(undefined)"
+              aria-label="Clear assignee filter"
+              title="Clear assignee filter"
+            >×</button>
+          </span>
+        }
+
+        @if (activeCount() > 1) {
           <button type="button" class="clear-all" (click)="store.clearFilters()">show all</button>
         }
       </div>
@@ -121,4 +135,17 @@ import { TaskStore } from '../task-store';
 })
 export class FilterBar {
   protected store = inject(TaskStore);
+
+  protected label(who: Assignee): string {
+    return ASSIGNEE_LABEL[who];
+  }
+
+  /** "show all" only earns its place once there's more than one thing to clear. */
+  protected activeCount(): number {
+    return (
+      this.store.projectFilter().size +
+      (this.store.tagFilter() !== undefined ? 1 : 0) +
+      (this.store.assigneeFilter() !== undefined ? 1 : 0)
+    );
+  }
 }

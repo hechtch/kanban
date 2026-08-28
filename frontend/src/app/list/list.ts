@@ -42,7 +42,10 @@ export class List {
 
   groups = computed<Group[]>(() => {
     const filter = this.store.projectFilter();
-    const tagFilter = this.store.tagFilter();
+    // Tag and assignee both span projects, so under either one most project
+    // sections would otherwise render empty.
+    const crossFilter =
+      this.store.tagFilter() !== undefined || this.store.assigneeFilter() !== undefined;
     const byProj = new Map<number | null, Task[]>();
     for (const t of this.store.visibleTasks()) {
       const key = t.project_id;
@@ -53,13 +56,12 @@ export class List {
     for (const p of this.store.projects()) {
       // Unfiltered: every project gets a section, even an empty one.
       // Project filter: only the selected project's section.
-      // Tag filter: only projects that actually have a matching task —
-      // a tag spans projects, so most sections would otherwise be empty.
+      // Tag/assignee filter: only projects that actually have a match.
       // Archived: folded away entirely unless explicitly selected, matching
       // the sidebar — otherwise finished projects pile up as empty sections.
       if (p.archived && !filter.has(p.id)) continue;
       if (filter.size && !filter.has(p.id)) continue;
-      if (tagFilter !== undefined && !byProj.has(p.id)) continue;
+      if (crossFilter && !byProj.has(p.id)) continue;
       out.push({ project: p, tasks: (byProj.get(p.id) ?? []).slice().sort(sortKey) });
     }
     if (filter.has(null) || (!filter.size && byProj.has(null))) {
