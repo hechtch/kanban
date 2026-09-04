@@ -1,5 +1,9 @@
 # Kanban work tracker
 
+> Delivered in v0.2.0 — 2026-08-28. See CHANGELOG.md. (0.1.0 was the
+> versioning-adoption bump and was never tagged; the whole v0.1 scope
+> plus the sidebar / ticket-modal follow-ups shipped together as 0.2.0.)
+
 Personal Kanban app for tracking work across small projects. Visual
 direction is locked by `plans/Kanban Wireframes v2 _standalone_.html` —
 notebook-paper aesthetic, four fixed columns, three create modes,
@@ -153,10 +157,10 @@ priority from `1–4`, and inline edits all hit it.
       standalone single-binary deploys.
 - [x] `CHANGELOG.md` with `[Unreleased] → Added` block populated
 - [ ] Smoke-test the `⌘N` flow end-to-end in a browser
-      *(user action — I exercised the API and built the bundles,
-      but didn't open a real browser this session)*
-- [ ] Tag `v0.1.0` and move this file to `plans/done/kanban.md`
-      *(user action — release tag is yours)*
+      *(user action — never recorded as done; left unchecked when
+      this plan was archived on 2026-09-04)*
+- [x] Tag the release and move this file to `plans/done/kanban.md`
+      *(tagged `v0.2.0` on 2026-09-04 — 0.1.0 was never released)*
 - [x] Sidebar project filter: clicking a project / Inbox narrows Board
       and List to it; persisted in localStorage; filter chip above the
       views; new tasks default into the selected project
@@ -181,13 +185,14 @@ priority from `1–4`, and inline edits all hit it.
 - [x] Assignee filter (you / Claude) in the sidebar, derived from
       plan ownership rather than a stored field
 
-## Open questions
+## Open questions (resolved)
 
-- Drag library: Angular CDK `DragDropModule` is the obvious pick;
-  worth a 30-min check that it handles column→column moves with
-  the fractional-index sort cleanly.
-- Should `Waiting` cards surface a "waiting on" string separate
-  from tags? The wireframe shows a `blocked` tag — keeping it as a
-  tag for v0.1 is simpler; revisit if it feels weak in practice.
-- Is the Backlog 5th column worth shipping in v0.1, or defer
-  until after the core loop feels right?
+- **Drag library** — Angular CDK `DragDropModule` shipped and handles
+  column→column moves cleanly with the fractional `sort_order` (one
+  PATCH per drop; see the invariants in `CLAUDE.md`).
+- **"Waiting on" for Waiting cards** — `waiting` became the `blocked`
+  status (renamed in a migration); the reason lives in a note or tag,
+  no separate field.
+- **Backlog column** — shipped as an off-board sixth status; the board
+  itself shows five columns (Todo · Doing · Blocked · Awaiting merge ·
+  Done).

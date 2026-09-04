@@ -1,5 +1,10 @@
 # Search & filter
 
+> Delivered in v0.2.0 — 2026-08-28 (PR #1). See CHANGELOG.md. Phases
+> 1–3 shipped; the Phase 4 polish items below were explicitly deferred
+> and remain unchecked. As of 2026-09-04 they are recorded here only —
+> pick them up under a new plan if they matter.
+
 Search across task content (title **and** markdown body) and filter
 the board / list views by project. Today the kanban shows everything
 on every screen — fine when there are a dozen tasks, breaks down
