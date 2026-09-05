@@ -5,7 +5,7 @@
 
 import { Component, inject } from '@angular/core';
 
-import { Assignee, ASSIGNEE_LABEL } from '../models';
+import { Assignee, ASSIGNEE_LABEL, UPDATED_LABEL, UpdatedWindow } from '../models';
 import { TaskStore } from '../task-store';
 
 @Component({
@@ -64,6 +64,19 @@ import { TaskStore } from '../task-store';
               (click)="store.setAssigneeFilter(undefined)"
               aria-label="Clear assignee filter"
               title="Clear assignee filter"
+            >×</button>
+          </span>
+        }
+
+        @if (store.updatedFilter(); as days) {
+          <span class="pill">
+            <span class="name"><span class="hash">updated in the</span> {{ updatedLabel(days) }}</span>
+            <button
+              type="button"
+              class="clear"
+              (click)="store.setUpdatedFilter(undefined)"
+              aria-label="Clear updated filter"
+              title="Clear updated filter"
             >×</button>
           </span>
         }
@@ -140,12 +153,17 @@ export class FilterBar {
     return ASSIGNEE_LABEL[who];
   }
 
+  protected updatedLabel(days: UpdatedWindow): string {
+    return UPDATED_LABEL[days];
+  }
+
   /** "show all" only earns its place once there's more than one thing to clear. */
   protected activeCount(): number {
     return (
       this.store.projectFilter().size +
       (this.store.tagFilter() !== undefined ? 1 : 0) +
-      (this.store.assigneeFilter() !== undefined ? 1 : 0)
+      (this.store.assigneeFilter() !== undefined ? 1 : 0) +
+      (this.store.updatedFilter() !== undefined ? 1 : 0)
     );
   }
 }

@@ -82,6 +82,34 @@ export const EFFORT_OPTIONS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
 export type Assignee = 'me' | 'claude';
 
 /**
+ * "Updated in the last N days" — the sidebar's recency filter. A fixed
+ * axis like assignee, so it's a short list rather than a free-form input.
+ * Days, not calendar boundaries: "last 7 days" at 9am Monday should still
+ * show what moved on Tuesday, not just since midnight.
+ */
+export type UpdatedWindow = 1 | 7 | 30;
+
+export const UPDATED_WINDOWS: UpdatedWindow[] = [1, 7, 30];
+
+export const UPDATED_LABEL: Record<UpdatedWindow, string> = {
+  1: 'last 24 hours',
+  7: 'last 7 days',
+  30: 'last 30 days',
+};
+
+/**
+ * Parse a server timestamp. SQLite's `datetime('now')` writes
+ * `YYYY-MM-DD HH:MM:SS` in UTC with no zone marker, and `new Date()` on
+ * that string is implementation-defined (Chrome reads it as local time),
+ * so normalise to ISO-with-Z first. Returns NaN for empty / unparseable.
+ */
+export function parseServerTime(s: string): number {
+  if (!s) return NaN;
+  const iso = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(s) ? s.replace(' ', 'T') + 'Z' : s;
+  return Date.parse(iso);
+}
+
+/**
  * Who owns a task. Derived, never stored: a task carrying a `plan_slug`
  * was claimed through the agent API, and that IS what "Claude's" means
  * here. The card's actor chip renders from this same call, so the sidebar

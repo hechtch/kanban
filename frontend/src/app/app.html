@@ -121,6 +121,25 @@
       }
     </ul>
 
+    <h2 class="section-head">Updated</h2>
+    <ul [attr.aria-hidden]="!sidebarOpen()" role="list" aria-label="Updated within">
+      @for (w of updatedWindows; track w) {
+        <li>
+          <button
+            type="button"
+            class="row when"
+            [class.selected]="updatedFilter() === w"
+            [attr.aria-pressed]="updatedFilter() === w"
+            (click)="selectUpdated(w)"
+            title="Tasks that changed in this window · click again to clear"
+          >
+            <span class="name">{{ updatedLabel(w) }}</span>
+            <span class="count">{{ updatedCounts()[w] }}</span>
+          </button>
+        </li>
+      }
+    </ul>
+
     <h2 class="section-head">Tags</h2>
     <ul [attr.aria-hidden]="!sidebarOpen()" role="list" aria-label="Tags">
       @for (t of tags(); track t.name) {

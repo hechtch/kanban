@@ -5,6 +5,16 @@ All notable changes to this project will be documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+- **"Updated" filter in the sidebar** — three rows (last 24 hours,
+  last 7 days, last 30 days) narrow the board and list to tasks that
+  changed inside that window, with a count beside each so "what's been
+  moving lately" is answered at a glance. Click again to clear; it
+  persists across reloads, ANDs with the project, tag, and assignee
+  filters, and shows as a pill in the filter bar. Agent notes now bump
+  a task's timestamp too, so a plan that only ever gets notes still
+  counts as moving.
+
 ## [0.2.0] - 2026-08-28
 
 ### Changed

@@ -330,18 +330,32 @@ func (s *Store) SetPlanStatus(slug, status, note string) (Task, error) {
 	return updated, nil
 }
 
-// AppendPlanNote writes a free-form 'note' activity entry. Returns ErrNotFound
-// if the slug is unknown.
+// AppendPlanNote writes a free-form 'note' activity entry and bumps the
+// task's updated_at. A note is what an agent leaves when the work moved
+// without changing column, and the board's "Updated" filter reads
+// updated_at — so a plan that only ever gets notes still shows as moving.
+// Returns ErrNotFound if the slug is unknown.
 func (s *Store) AppendPlanNote(slug, text string) (Activity, error) {
 	t, err := s.GetTaskByPlanSlug(slug)
 	if err != nil {
 		return Activity{}, err
 	}
-	res, err := s.db.Exec(
+	tx, err := s.db.Begin()
+	if err != nil {
+		return Activity{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	res, err := tx.Exec(
 		`INSERT INTO activity (task_id, kind, text) VALUES (?, 'note', ?)`,
 		t.ID, text,
 	)
 	if err != nil {
+		return Activity{}, err
+	}
+	if _, err := tx.Exec(`UPDATE task SET updated_at = datetime('now') WHERE id = ?`, t.ID); err != nil {
+		return Activity{}, err
+	}
+	if err := tx.Commit(); err != nil {
 		return Activity{}, err
 	}
 	id, _ := res.LastInsertId()

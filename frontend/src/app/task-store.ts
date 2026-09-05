@@ -2,7 +2,10 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { Observable, firstValueFrom } from 'rxjs';
 
 import { ApiService } from './api.service';
-import { Assignee, assigneeOf, COLUMN_STATUSES, Project, Status, Task, TaskFilter } from './models';
+import {
+  Assignee, assigneeOf, COLUMN_STATUSES, parseServerTime, Project, Status, Task, TaskFilter,
+  UPDATED_WINDOWS, UpdatedWindow,
+} from './models';
 
 /**
  * One entry in the sidebar project filter: a project id, or `null` for
@@ -14,6 +17,9 @@ export type ProjectKey = number | null;
 const FILTER_KEY = 'kanban-project-filter';
 const TAG_FILTER_KEY = 'kanban-tag-filter';
 const ASSIGNEE_FILTER_KEY = 'kanban-assignee-filter';
+const UPDATED_FILTER_KEY = 'kanban-updated-filter';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface TagCount {
   name: string;
@@ -29,6 +35,14 @@ export class TaskStore {
   private readonly _projectFilter = signal<ReadonlySet<ProjectKey>>(loadFilter());
   private readonly _tagFilter = signal<string | undefined>(loadTagFilter());
   private readonly _assigneeFilter = signal<Assignee | undefined>(loadAssigneeFilter());
+  private readonly _updatedFilter = signal<UpdatedWindow | undefined>(loadUpdatedFilter());
+  /**
+   * "Now" for the recency filter, as a signal so the cutoff is a tracked
+   * dependency rather than a `Date.now()` frozen inside a memoised computed.
+   * Re-stamped on every refresh and every pick, which is as often as the
+   * answer can visibly change.
+   */
+  private readonly _now = signal(Date.now());
 
   readonly tasks = this._tasks.asReadonly();
   readonly projects = this._projects.asReadonly();
@@ -137,11 +151,36 @@ export class TaskStore {
     return out;
   });
 
+  /**
+   * The active recency filter in days, or `undefined`. Like assignee, it
+   * never auto-clears: the rows are always in the sidebar.
+   */
+  readonly updatedFilter = this._updatedFilter.asReadonly();
+
+  /**
+   * How many tasks moved inside each window — same basis as `tagCounts`, so
+   * the sidebar row answers "what's been moving lately" before it's clicked.
+   * Every write bumps `updated_at` (creation included), so a fresh task
+   * counts as moved.
+   */
+  readonly updatedCounts = computed<Record<UpdatedWindow, number>>(() => {
+    const now = this._now();
+    const out = { 1: 0, 7: 0, 30: 0 } as Record<UpdatedWindow, number>;
+    for (const t of this.liveTasks()) {
+      const at = parseServerTime(t.updated_at);
+      for (const days of UPDATED_WINDOWS) {
+        if (at >= now - days * DAY_MS) out[days]++;
+      }
+    }
+    return out;
+  });
+
   readonly hasFilter = computed(
     () =>
       this.projectFilter().size > 0 ||
       this.tagFilter() !== undefined ||
-      this.assigneeFilter() !== undefined,
+      this.assigneeFilter() !== undefined ||
+      this.updatedFilter() !== undefined,
   );
 
   /**
@@ -154,10 +193,15 @@ export class TaskStore {
     const f = this.projectFilter();
     const tag = this.tagFilter();
     const who = this.assigneeFilter();
+    const days = this.updatedFilter();
     let out = this.liveTasks();
     if (f.size) out = out.filter(t => f.has(t.project_id));
     if (tag !== undefined) out = out.filter(t => t.tags.includes(tag));
     if (who !== undefined) out = out.filter(t => assigneeOf(t) === who);
+    if (days !== undefined) {
+      const cutoff = this._now() - days * DAY_MS;
+      out = out.filter(t => parseServerTime(t.updated_at) >= cutoff);
+    }
     return out;
   });
 
@@ -182,6 +226,7 @@ export class TaskStore {
   }
 
   refresh(): void {
+    this._now.set(Date.now());
     this.api.listProjects().subscribe(p => this._projects.set(p));
     this.refreshTasks();
   }
@@ -285,10 +330,24 @@ export class TaskStore {
     this.setAssigneeFilter(this.assigneeFilter() === who ? undefined : who);
   }
 
+  setUpdatedFilter(days: UpdatedWindow | undefined): void {
+    this._now.set(Date.now());
+    this._updatedFilter.set(days);
+    try {
+      if (days === undefined) localStorage.removeItem(UPDATED_FILTER_KEY);
+      else localStorage.setItem(UPDATED_FILTER_KEY, String(days));
+    } catch { /* ignore */ }
+  }
+
+  toggleUpdatedFilter(days: UpdatedWindow): void {
+    this.setUpdatedFilter(this.updatedFilter() === days ? undefined : days);
+  }
+
   clearFilters(): void {
     this.setProjectFilter(undefined);
     this.setTagFilter(undefined);
     this.setAssigneeFilter(undefined);
+    this.setUpdatedFilter(undefined);
   }
 
   /**
@@ -404,6 +463,15 @@ function loadAssigneeFilter(): Assignee | undefined {
   try {
     const v = localStorage.getItem(ASSIGNEE_FILTER_KEY);
     return v === 'me' || v === 'claude' ? v : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function loadUpdatedFilter(): UpdatedWindow | undefined {
+  try {
+    const v = Number(localStorage.getItem(UPDATED_FILTER_KEY));
+    return (UPDATED_WINDOWS as number[]).includes(v) ? (v as UpdatedWindow) : undefined;
   } catch {
     return undefined;
   }

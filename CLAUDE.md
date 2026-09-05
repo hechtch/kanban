@@ -174,7 +174,9 @@ back to the file mid-flight.
    the same status without a note is a no-op.
 5. **Leave notes** as you go: `POST /api/agent/plans/<slug>/notes`
    with `{"text":"blocked on X"}`. Cheaper than a status flip and
-   shows up in the activity log.
+   shows up in the activity log. A note also bumps the task's
+   `updated_at`, so it counts as movement under the sidebar's
+   "Updated" filter.
 6. **Flip to done** when shipping; if the plan is fully delivered,
    also write `plans/done/<slug>.md` from the current task body so
    the archival convention is preserved.

@@ -3,7 +3,7 @@ import { ActivatedRoute, Router, RouterLink, RouterLinkActive, RouterOutlet } fr
 import { toSignal } from '@angular/core/rxjs-interop';
 import { map } from 'rxjs';
 
-import { Assignee, Project, Task } from './models';
+import { Assignee, Project, Task, UPDATED_LABEL, UPDATED_WINDOWS, UpdatedWindow } from './models';
 import { TaskStore } from './task-store';
 import { Capture } from './task-modal/capture';
 import { DashboardNav } from './shared/dashboard-nav';
@@ -61,6 +61,9 @@ export class App {
   private rangeAnchor: number | null | undefined = undefined;
   readonly tagFilter = this.store.tagFilter;
   readonly tags = this.store.tagCounts;
+  readonly updatedWindows = UPDATED_WINDOWS;
+  readonly updatedFilter = this.store.updatedFilter;
+  readonly updatedCounts = this.store.updatedCounts;
 
   readonly captureOpen = signal(false);
   readonly navMenuOpen = signal(false);
@@ -170,6 +173,16 @@ export class App {
   /** Tag rows work the same way: click to select, click again to clear. */
   selectTag(tag: string): void {
     this.store.toggleTagFilter(tag);
+    this.returnToBoard();
+  }
+
+  updatedLabel(days: UpdatedWindow): string {
+    return UPDATED_LABEL[days];
+  }
+
+  /** "Updated" rows: click to narrow to what moved in that window, again to clear. */
+  selectUpdated(days: UpdatedWindow): void {
+    this.store.toggleUpdatedFilter(days);
     this.returnToBoard();
   }
 

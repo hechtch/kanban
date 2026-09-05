@@ -185,6 +185,30 @@ func TestAppendPlanNoteWritesActivity(t *testing.T) {
 	}
 }
 
+func TestAppendPlanNoteBumpsUpdatedAt(t *testing.T) {
+	s := newTestStore(t)
+	task, _, err := s.UpsertPlan("agent-api", PlanUpsert{})
+	if err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	// Push updated_at into the past first: datetime('now') has one-second
+	// resolution, so "changed since the upsert" would be a coin flip.
+	const stale = "2000-01-01 00:00:00"
+	if _, err := s.db.Exec(`UPDATE task SET updated_at = ? WHERE id = ?`, stale, task.ID); err != nil {
+		t.Fatalf("backdate: %v", err)
+	}
+	if _, err := s.AppendPlanNote("agent-api", "phase 2 done"); err != nil {
+		t.Fatalf("note: %v", err)
+	}
+	got, err := s.GetTaskByPlanSlug("agent-api")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if got.UpdatedAt == stale {
+		t.Fatalf("note didn't bump updated_at (still %q)", got.UpdatedAt)
+	}
+}
+
 func TestStatusConstraintMigrationFromWaitingToBlocked(t *testing.T) {
 	// Seed a temp DB with the old schema (CHECK constraint + 'waiting' row),
 	// then run Open() which should run migrate() and rename to 'blocked'.

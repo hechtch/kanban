@@ -294,3 +294,80 @@ describe('TaskStore assignee filter', () => {
     expect(localStorage.getItem('kanban-assignee-filter')).toBeNull();
   });
 });
+
+describe('TaskStore updated filter', () => {
+  let store: TaskStore;
+  let http: HttpTestingController;
+
+  /** A server-shaped timestamp (`YYYY-MM-DD HH:MM:SS`, UTC) this many hours back. */
+  const hoursAgo = (h: number): string =>
+    new Date(Date.now() - h * 3600_000).toISOString().slice(0, 19).replace('T', ' ');
+
+  const aged: Task[] = [
+    { ...task(10, 1), updated_at: hoursAgo(2) },
+    { ...task(11, 1), updated_at: hoursAgo(3 * 24) },
+    { ...task(12, 2), updated_at: hoursAgo(20 * 24) },
+    { ...task(13, null), updated_at: hoursAgo(90 * 24) },
+    { ...task(14, null), updated_at: '' },
+  ];
+
+  beforeEach(() => {
+    localStorage.removeItem('kanban-project-filter');
+    localStorage.removeItem('kanban-updated-filter');
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    http = TestBed.inject(HttpTestingController);
+    store = TestBed.inject(TaskStore);
+    http.expectOne(req => req.url.endsWith('/api/projects')).flush(projects);
+    http.expectOne(req => req.url.endsWith('/api/tasks')).flush(aged);
+  });
+
+  afterEach(() => {
+    http.verify();
+    localStorage.removeItem('kanban-project-filter');
+    localStorage.removeItem('kanban-updated-filter');
+  });
+
+  it('counts what moved inside each window; an empty timestamp never counts', () => {
+    expect(store.updatedCounts()).toEqual({ 1: 1, 7: 2, 30: 3 });
+  });
+
+  it('narrows to the window and back', () => {
+    store.setUpdatedFilter(1);
+    expect(store.visibleTasks().map(t => t.id)).toEqual([10]);
+    store.setUpdatedFilter(7);
+    expect(store.visibleTasks().map(t => t.id)).toEqual([10, 11]);
+    store.toggleUpdatedFilter(7);
+    expect(store.updatedFilter()).toBeUndefined();
+    expect(store.visibleTasks().length).toBe(5);
+  });
+
+  it('ANDs with the project filter', () => {
+    store.setProjectFilter([2]);
+    store.setUpdatedFilter(30);
+    expect(store.visibleTasks().map(t => t.id)).toEqual([12]);
+    expect(store.hasFilter()).toBe(true);
+  });
+
+  it('persists across reloads and is cleared by clearFilters', () => {
+    store.setUpdatedFilter(7);
+    expect(localStorage.getItem('kanban-updated-filter')).toBe('7');
+    store.clearFilters();
+    expect(store.updatedFilter()).toBeUndefined();
+    expect(localStorage.getItem('kanban-updated-filter')).toBeNull();
+  });
+
+  it('ignores a persisted window it does not offer', () => {
+    localStorage.setItem('kanban-updated-filter', '5');
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    http = TestBed.inject(HttpTestingController);
+    store = TestBed.inject(TaskStore);
+    http.expectOne(req => req.url.endsWith('/api/projects')).flush(projects);
+    http.expectOne(req => req.url.endsWith('/api/tasks')).flush(aged);
+    expect(store.updatedFilter()).toBeUndefined();
+  });
+});
